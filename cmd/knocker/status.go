@@ -1,0 +1,36 @@
+package main
+
+import (
+	"log"
+
+	"github.com/kardianos/service"
+	"github.com/spf13/cobra"
+)
+
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Get the status of the Knocker service",
+	Long:  `This command checks the status of the installed Knocker service.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		svcConfig := &service.Config{
+			Name: "Knocker",
+		}
+
+		prg := &program{}
+		s, err := service.New(prg, svcConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		status, err := s.Status()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("Service status: %v\n", status)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(statusCmd)
+}
