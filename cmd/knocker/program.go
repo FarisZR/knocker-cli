@@ -15,6 +15,7 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
+	logger.Println("Starting Knocker service...")
 	p.quit = make(chan struct{})
 	go p.run()
 	return nil
@@ -24,11 +25,19 @@ func (p *program) run() {
 	ipGetter := util.NewIPGetter()
 	interval := time.Duration(viper.GetInt("interval")) * time.Minute
 	ipCheckURL := viper.GetString("ip_check_url")
-	knockerService := internalService.NewService(apiClient, ipGetter, interval, ipCheckURL)
+
+	// Perform initial health check
+	if err := apiClient.HealthCheck(); err != nil {
+		logger.Fatalf("Initial health check failed: %v. Please check your API URL and key.", err)
+	}
+	logger.Println("API health check successful.")
+
+	knockerService := internalService.NewService(apiClient, ipGetter, interval, ipCheckURL, logger)
 
 	knockerService.Run(p.quit)
 }
 func (p *program) Stop(s service.Service) error {
+	logger.Println("Stopping Knocker service...")
 	close(p.quit)
 	return nil
 }

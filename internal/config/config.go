@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -28,6 +29,8 @@ func InitConfig() {
 		viper.SetConfigType("yaml")
 	}
 
+	viper.SetEnvPrefix("KNOCKER")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.

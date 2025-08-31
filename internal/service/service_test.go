@@ -2,8 +2,10 @@ package service
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -42,6 +44,7 @@ func TestServiceRun(t *testing.T) {
 		APIClient:  api.NewClient(server.URL, "test-key"),
 		IPGetter:   &mockIPGetter{},
 		Interval:   1 * time.Millisecond, // Run once and exit
+		Logger:     log.New(os.Stdout, "test: ", log.LstdFlags),
 		stop:       make(chan struct{}),
 		lastIP:     "",
 		ipCheckURL: server.URL,

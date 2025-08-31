@@ -15,22 +15,25 @@ type Service struct {
 	APIClient  *api.Client
 	IPGetter   IPGetter
 	Interval   time.Duration
+	Logger     *log.Logger
 	stop       chan struct{}
 	lastIP     string
 	ipCheckURL string
 }
 
-func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration, ipCheckURL string) *Service {
+func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration, ipCheckURL string, logger *log.Logger) *Service {
 	return &Service{
 		APIClient:  apiClient,
 		IPGetter:   ipGetter,
 		Interval:   interval,
+		Logger:     logger,
 		stop:       make(chan struct{}),
 		ipCheckURL: ipCheckURL,
 	}
 }
 
 func (s *Service) Run(quit <-chan struct{}) {
+	s.Logger.Printf("Service running. Checking for IP changes every %v.", s.Interval)
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
 
@@ -54,9 +57,9 @@ func (s *Service) checkAndKnock() {
 	// If no IP check URL is provided, just knock without checking.
 	// The remote API will use the request's source IP.
 	if s.ipCheckURL == "" {
-		log.Println("Knocking without IP check...")
+		s.Logger.Println("Knocking without IP check...")
 		if _, err := s.APIClient.Knock("", 0); err != nil {
-			log.Printf("Knock failed: %v", err)
+			s.Logger.Printf("Knock failed: %v", err)
 		}
 		return
 	}
@@ -64,21 +67,21 @@ func (s *Service) checkAndKnock() {
 	// If an IP check URL is provided, perform the check and compare.
 	ip, err := s.IPGetter.GetPublicIP(s.ipCheckURL)
 	if err != nil {
-		log.Printf("Error getting public IP: %v", err)
+		s.Logger.Printf("Error getting public IP: %v", err)
 		return
 	}
 
 	if ip != s.lastIP {
-		log.Printf("IP changed from %s to %s. Knocking...", s.lastIP, ip)
+		s.Logger.Printf("IP changed from %s to %s. Knocking...", s.lastIP, ip)
 		if err := s.APIClient.HealthCheck(); err != nil {
-			log.Printf("Health check failed: %v", err)
+			s.Logger.Printf("Health check failed: %v", err)
 			return
 		}
 		if _, err := s.APIClient.Knock(ip, 0); err != nil {
-			log.Printf("Knock failed: %v", err)
+			s.Logger.Printf("Knock failed: %v", err)
 			return
 		}
 		s.lastIP = ip
-		log.Println("Successfully knocked and updated IP.")
+		s.Logger.Println("Successfully knocked and updated IP.")
 	}
 }

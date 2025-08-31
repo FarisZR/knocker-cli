@@ -10,11 +10,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-var logger *log.Logger
+var (
+	logger  *log.Logger
+	version = "dev"
+)
 
 var rootCmd = &cobra.Command{
-	Use:   "knocker",
-	Short: "Knocker is a CLI tool to automatically manage IP whitelisting.",
+	Use:     "knocker",
+	Version: version,
+	Short:   "Knocker is a CLI tool to automatically manage IP whitelisting.",
 	Long: `A reliable, cross-platform service that keeps your external IP address whitelisted.
 It runs in the background, detects IP changes, and ensures you always have access.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -35,6 +39,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(config.InitConfig)
+	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is $HOME/.knocker.yaml)")
 	rootCmd.PersistentFlags().Int("interval", 5, "Interval in minutes to check for IP changes")
