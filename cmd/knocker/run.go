@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -21,17 +19,12 @@ var runCmd = &cobra.Command{
 		prg := &program{}
 		s, err := service.New(prg, svcConfig)
 		if err != nil {
-			log.Fatal(err)
-		}
-
-		logger, err := s.Logger(nil)
-		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		err = s.Run()
 		if err != nil {
-			logger.Error(err)
+			logger.Fatal(err)
 		}
 	},
 }

@@ -47,8 +47,11 @@ func TestServiceRun(t *testing.T) {
 		ipCheckURL: server.URL,
 	}
 
+	// Create a quit channel for the test
+	quit := make(chan struct{})
+
 	// Run the service in a goroutine
-	go service.Run()
+	go service.Run(quit)
 
 	// Allow the service to run for a short time
 	time.Sleep(10 * time.Millisecond)

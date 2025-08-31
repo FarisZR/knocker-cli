@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -19,15 +19,15 @@ var statusCmd = &cobra.Command{
 		prg := &program{}
 		s, err := service.New(prg, svcConfig)
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		status, err := s.Status()
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
-		log.Printf("Service status: %v\n", status)
+		fmt.Printf("Service status: %v\n", status)
 	},
 }
 

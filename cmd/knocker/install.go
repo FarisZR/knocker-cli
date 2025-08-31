@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -21,15 +19,15 @@ var installCmd = &cobra.Command{
 		prg := &program{}
 		s, err := service.New(prg, svcConfig)
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		err = s.Install()
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 
-		log.Println("Service installed successfully.")
+		logger.Println("Service installed successfully.")
 	},
 }
 

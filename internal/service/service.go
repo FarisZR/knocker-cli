@@ -30,7 +30,7 @@ func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration
 	}
 }
 
-func (s *Service) Run() {
+func (s *Service) Run(quit <-chan struct{}) {
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
 
@@ -38,6 +38,8 @@ func (s *Service) Run() {
 		select {
 		case <-ticker.C:
 			s.checkAndKnock()
+		case <-quit:
+			return
 		case <-s.stop:
 			return
 		}
