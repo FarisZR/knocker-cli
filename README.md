@@ -1,6 +1,6 @@
-# Knocker CLI
+# knocker-cli
 
-Knocker is a static Go CLI service that automatically requests a whitelist for the external IP of the device on IP address changes or when the whitelist expires. It runs in the background to ensure you always have access.
+`knocker-cli` is a static Go CLI service that automatically requests a whitelist for the external IP of the device on IP address changes or when the whitelist expires. It runs in the background to ensure you always have access.
 
 ## Features
 
@@ -10,13 +10,29 @@ Knocker is a static Go CLI service that automatically requests a whitelist for t
 - **Docker Support:** Can be run in a Docker container.
 - **Manual Whitelisting:** Manually trigger a whitelist request at any time.
 
-## How it Works
+## How It Works
 
-Knocker can detect IP changes in two ways:
+`knocker-cli` operates in two distinct modes for handling IP changes:
 
-1.  **API-based Detection (Default):** By default, Knocker relies on the remote API to detect the public IP address. When the `knocker run` service is active, it periodically sends a "knock" request to the API. The API server then uses the source IP of that request as the address to be whitelisted. This is the simplest and recommended method.
+### Simple Mode (Default)
 
-2.  **External IP Check (Optional):** For more advanced scenarios, Knocker can be configured to use external public IP checking services. In this mode, it will fetch the IP from a third-party service and compare it to the last known IP. If a change is detected, it will then send a request to the Knocker API to whitelist the new IP.
+This is the default and recommended mode of operation.
+
+1.  The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
+2.  The service **does not** check its own IP address.
+3.  Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
+
+In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whitelist entry fresh.
+
+### Comparison Mode (Optional)
+
+This mode is for more advanced use cases where you want the client to be responsible for detecting IP changes.
+
+1.  To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
+2.  The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
+3.  At each interval, it fetches the IP again.
+4.  It compares the new IP with the one stored in memory.
+5.  If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
 
 ## Installation
 
@@ -27,7 +43,7 @@ To install from source, you will need to have Go installed.
 ```bash
 git clone https://github.com/FarisZR/knocker-cli.git
 cd knocker-cli
-make install
+go install ./...
 ```
 
 ### Using Docker
@@ -50,14 +66,18 @@ Create a file named `.knocker.yaml` in your home directory with the following co
 ```yaml
 api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
+interval: 5 # in minutes
+ip_check_url: "" # optional, e.g. "https://ifconfig.me"
 ```
 
 ### Environment Variables
 
-You can also configure Knocker using environment variables:
+You can also configure `knocker-cli` using environment variables:
 
 - `KNOCKER_API_URL`: The URL of the Knocker API.
 - `KNOCKER_API_KEY`: Your API key.
+- `KNOCKER_INTERVAL`: The interval in minutes to check for IP changes.
+- `KNOCKER_IP_CHECK_URL`: Optional URL of the external IP checker service.
 
 ## Usage
 
@@ -91,15 +111,17 @@ knocker status
 
 ### Building
 
-To build the binaries for all supported platforms, run:
+To build the binary for your current platform, run:
 
 ```bash
-make build
+go build -o knocker ./cmd/knocker
 ```
 
-### Cleaning
+### Cross-Platform Releases (with GoReleaser)
 
-To clean up the build artifacts, run:
+To create cross-platform builds, archives, and releases, you can use [GoReleaser](https://goreleaser.com/).
 
 ```bash
-make clean
+# This will create builds for all platforms defined in .goreleaser.yml
+goreleaser release --snapshot --clean
+```

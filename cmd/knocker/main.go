@@ -7,6 +7,7 @@ import (
 
 	"github.com/FarisZR/knocker-cli/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var logger *log.Logger
@@ -36,6 +37,11 @@ func init() {
 	cobra.OnInitialize(config.InitConfig)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is $HOME/.knocker.yaml)")
+	rootCmd.PersistentFlags().Int("interval", 5, "Interval in minutes to check for IP changes")
+	rootCmd.PersistentFlags().String("ip_check_url", "", "URL of the external IP checker service")
+	viper.BindPFlag("interval", rootCmd.PersistentFlags().Lookup("interval"))
+	viper.BindPFlag("ip_check_url", rootCmd.PersistentFlags().Lookup("ip_check_url"))
+	viper.SetDefault("interval", 5)
 }
 
 func main() {

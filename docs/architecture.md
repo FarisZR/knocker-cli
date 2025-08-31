@@ -1,10 +1,10 @@
-# Knocker Architecture
+# knocker-cli Architecture
 
-This document outlines the architecture of the Knocker CLI service.
+This document outlines the architecture of the `knocker-cli` project.
 
 ## High-Level Overview
 
-Knocker is a Go-based CLI application designed to run as a background service on multiple platforms (Linux, macOS, and Windows). Its primary function is to monitor for changes in the machine's public IP address and, upon detection, make an API call to a remote server to whitelist the new IP.
+`knocker-cli` is a Go-based CLI application designed to run as a background service on multiple platforms (Linux, macOS, and Windows). Its primary function is to monitor for changes in the machine's public IP address and, upon detection, make an API call to a remote server to whitelist the new IP.
 
 The project is composed of several key components that work together to provide this functionality.
 
@@ -26,7 +26,7 @@ The command-line interface is built using the **Cobra** library. It provides the
 
 ### 2. Configuration (Viper)
 
-Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `config.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and the IP check interval.
+Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `.knocker.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and the IP check interval.
 
 ### 3. Service Management (kardianos/service)
 
@@ -39,9 +39,9 @@ The core logic of the application is wrapped in a `program` struct that implemen
 This is the heart of the application, located in the `internal/service` package. It contains the main loop that periodically performs the following actions:
 
 1.  **Health Check**: It first checks the `/health` endpoint of the remote API to ensure it is available.
-2.  **IP Detection**: It fetches the current public IP address. By default, Knocker relies on the remote API to determine the IP address from the incoming request. Optionally, it can be configured to use external IP checker services.
-3.  **IP Comparison**: It compares the current IP with the previously recorded IP.
-4.  **API Call**: If the IP has changed, it calls the `/knock` endpoint on the remote API to whitelist the new IP.
+2.  **IP Detection & Knocking**: The service operates in one of two modes:
+    *   **Simple Mode (Default):** If no `ip_check_url` is configured, the service sends a "knock" request to the API at each interval. It does not check its own IP. The remote API is responsible for identifying the client's IP from the request and updating the whitelist.
+    *   **Comparison Mode (Optional):** If an `ip_check_url` is provided, the service first fetches its public IP from that URL. It compares this IP to the last known IP. If they are different, it then sends a "knock" request to the API to whitelist the new address.
 
 ### 5. API Client
 
@@ -58,9 +58,24 @@ The `internal/util` package contains a utility for fetching the public IP addres
 
 ## How It Works: IP Change Detection
 
-1.  The background service starts and retrieves the initial public IP address by making a "knock" request to the API. The API records the IP of the machine making the request.
-2.  The service stores this IP in memory.
-3.  At a configurable interval (e.g., every 5 minutes), the service wakes up and performs a health check on the API.
-4.  If the health check is successful, it makes another "knock" request.
-5.  The remote API receives the request and can see the source IP. If this new IP is different from the one previously whitelisted for that client, the API updates its records.
-6.  The Knocker service itself can also be configured to use an external IP checking service. In this mode, it fetches the IP from the external service and compares it to the last known IP. If it has changed, it then calls the `/knock` endpoint with the new IP. By default, this external check is disabled.
+`knocker-cli` operates in two distinct modes for handling IP changes:
+
+### Simple Mode (Default)
+
+This is the default and recommended mode of operation.
+
+1.  The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
+2.  The service **does not** check its own IP address.
+3.  Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
+
+In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whitelist entry fresh.
+
+### Comparison Mode (Optional)
+
+This mode is for more advanced use cases where you want the client to be responsible for detecting IP changes.
+
+1.  To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
+2.  The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
+3.  At each interval, it fetches the IP again.
+4.  It compares the new IP with the one stored in memory.
+5.  If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.

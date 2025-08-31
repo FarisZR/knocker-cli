@@ -51,6 +51,17 @@ func (s *Service) Stop() {
 }
 
 func (s *Service) checkAndKnock() {
+	// If no IP check URL is provided, just knock without checking.
+	// The remote API will use the request's source IP.
+	if s.ipCheckURL == "" {
+		log.Println("Knocking without IP check...")
+		if _, err := s.APIClient.Knock("", 0); err != nil {
+			log.Printf("Knock failed: %v", err)
+		}
+		return
+	}
+
+	// If an IP check URL is provided, perform the check and compare.
 	ip, err := s.IPGetter.GetPublicIP(s.ipCheckURL)
 	if err != nil {
 		log.Printf("Error getting public IP: %v", err)
@@ -58,7 +69,7 @@ func (s *Service) checkAndKnock() {
 	}
 
 	if ip != s.lastIP {
-		log.Printf("IP changed from %s to %s", s.lastIP, ip)
+		log.Printf("IP changed from %s to %s. Knocking...", s.lastIP, ip)
 		if err := s.APIClient.HealthCheck(); err != nil {
 			log.Printf("Health check failed: %v", err)
 			return
@@ -68,5 +79,6 @@ func (s *Service) checkAndKnock() {
 			return
 		}
 		s.lastIP = ip
+		log.Println("Successfully knocked and updated IP.")
 	}
 }

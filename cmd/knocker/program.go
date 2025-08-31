@@ -22,7 +22,9 @@ func (p *program) Start(s service.Service) error {
 func (p *program) run() {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
 	ipGetter := util.NewIPGetter()
-	knockerService := internalService.NewService(apiClient, ipGetter, 5*time.Minute, "https://api.ipify.org")
+	interval := time.Duration(viper.GetInt("interval")) * time.Minute
+	ipCheckURL := viper.GetString("ip_check_url")
+	knockerService := internalService.NewService(apiClient, ipGetter, interval, ipCheckURL)
 
 	knockerService.Run(p.quit)
 }
