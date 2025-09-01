@@ -33,7 +33,11 @@ func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration
 }
 
 func (s *Service) Run(quit <-chan struct{}) {
-	s.Logger.Printf("Service running. Checking for IP changes every %v.", s.Interval)
+	if s.ipCheckURL == "" {
+		s.Logger.Printf("Service running. Knocking every %v (no ip_check_url set).", s.Interval)
+	} else {
+		s.Logger.Printf("Service running. Checking for IP changes every %v.", s.Interval)
+	}
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
 
