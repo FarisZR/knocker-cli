@@ -48,6 +48,7 @@ func TestServiceRun(t *testing.T) {
 		stop:       make(chan struct{}),
 		lastIP:     "",
 		ipCheckURL: server.URL,
+		ttl:        3600,
 	}
 
 	// Create a quit channel for the test

@@ -19,9 +19,10 @@ type Service struct {
 	stop       chan struct{}
 	lastIP     string
 	ipCheckURL string
+	ttl        int
 }
 
-func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration, ipCheckURL string, logger *log.Logger) *Service {
+func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration, ipCheckURL string, ttl int, logger *log.Logger) *Service {
 	return &Service{
 		APIClient:  apiClient,
 		IPGetter:   ipGetter,
@@ -29,6 +30,7 @@ func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration
 		Logger:     logger,
 		stop:       make(chan struct{}),
 		ipCheckURL: ipCheckURL,
+		ttl:        ttl,
 	}
 }
 
@@ -62,7 +64,7 @@ func (s *Service) checkAndKnock() {
 	// The remote API will use the request's source IP.
 	if s.ipCheckURL == "" {
 		s.Logger.Println("Knocking without IP check...")
-		if _, err := s.APIClient.Knock("", 0); err != nil {
+		if _, err := s.APIClient.Knock("", s.ttl); err != nil {
 			s.Logger.Printf("Knock failed: %v", err)
 		}
 		return
@@ -81,7 +83,7 @@ func (s *Service) checkAndKnock() {
 			s.Logger.Printf("Health check failed: %v", err)
 			return
 		}
-		if _, err := s.APIClient.Knock(ip, 0); err != nil {
+		if _, err := s.APIClient.Knock(ip, s.ttl); err != nil {
 			s.Logger.Printf("Knock failed: %v", err)
 			return
 		}

@@ -25,6 +25,7 @@ func (p *program) run() {
 	ipGetter := util.NewIPGetter()
 	interval := time.Duration(viper.GetInt("interval")) * time.Minute
 	ipCheckURL := viper.GetString("ip_check_url")
+	ttl := viper.GetInt("ttl")
 
 	// Perform initial health check
 	if err := apiClient.HealthCheck(); err != nil {
@@ -32,7 +33,7 @@ func (p *program) run() {
 	}
 	logger.Println("API health check successful.")
 
-	knockerService := internalService.NewService(apiClient, ipGetter, interval, ipCheckURL, logger)
+	knockerService := internalService.NewService(apiClient, ipGetter, interval, ipCheckURL, ttl, logger)
 
 	knockerService.Run(p.quit)
 }
