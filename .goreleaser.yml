@@ -2,7 +2,10 @@ before:
   hooks:
     - go mod tidy
 builds:
-  - env:
+  - id: knocker
+    main: ./cmd/knocker
+    binary: knocker
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -39,14 +42,8 @@ nfpms:
       - src: LICENSE
         dst: /usr/share/doc/knocker/LICENSE
     scripts:
-      postinstall: |
-        echo "Knocker has been installed successfully."
-        echo "Run 'knocker --help' for more information."
-      preremove: |
-        if command -v knocker >/dev/null 2>&1; then
-          knocker stop 2>/dev/null || true
-          knocker uninstall 2>/dev/null || true
-        fi
+      postinstall: scripts/postinstall.sh
+      preremove: scripts/preremove.sh
 checksum:
   name_template: 'checksums.txt'
 snapshot:
