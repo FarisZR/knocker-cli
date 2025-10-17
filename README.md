@@ -103,6 +103,24 @@ knocker knock
 knocker install
 ```
 
+### Start the installed service
+
+```bash
+knocker start
+```
+
+### Stop the running service
+
+```bash
+knocker stop
+```
+
+### Uninstall the service
+
+```bash
+knocker uninstall
+```
+
 ### Check service status
 
 ```bash
