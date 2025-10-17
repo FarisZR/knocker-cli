@@ -67,12 +67,28 @@ func TestKnockWithTTL(t *testing.T) {
 			t.Errorf("Failed to decode request body: %v", err)
 		}
 
-		if ttl, ok := requestBody["ttl"]; ok {
-			if int(ttl.(float64)) != expectedTTL {
-				t.Errorf("Expected TTL %d, got %v", expectedTTL, ttl)
-			}
-		} else {
+		ttlValue, ok := requestBody["ttl"]
+		if !ok {
 			t.Error("TTL not found in request body")
+			return
+		}
+
+		// Safely convert ttl to int with type checking
+		var actualTTL int
+		switch v := ttlValue.(type) {
+		case float64:
+			actualTTL = int(v)
+		case int:
+			actualTTL = v
+		case int64:
+			actualTTL = int(v)
+		default:
+			t.Errorf("TTL has unexpected type %T, value: %v", ttlValue, ttlValue)
+			return
+		}
+
+		if actualTTL != expectedTTL {
+			t.Errorf("Expected TTL %d, got %d", expectedTTL, actualTTL)
 		}
 
 		w.WriteHeader(http.StatusOK)
