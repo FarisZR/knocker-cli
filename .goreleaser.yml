@@ -23,6 +23,30 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
+nfpms:
+  - id: packages
+    package_name: knocker
+    vendor: FarisZR
+    homepage: https://github.com/FarisZR/knocker-cli
+    maintainer: FarisZR <35614734+FarisZR@users.noreply.github.com>
+    description: A reliable, cross-platform service that keeps your external IP address whitelisted.
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/knocker/LICENSE
+    scripts:
+      postinstall: |
+        echo "Knocker has been installed successfully."
+        echo "Run 'knocker --help' for more information."
+      preremove: |
+        if command -v knocker >/dev/null 2>&1; then
+          knocker stop 2>/dev/null || true
+          knocker uninstall 2>/dev/null || true
+        fi
 checksum:
   name_template: 'checksums.txt'
 snapshot:

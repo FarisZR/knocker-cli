@@ -15,6 +15,7 @@ var knockCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		apiURL := viper.GetString("api_url")
 		apiKey := viper.GetString("api_key")
+		ttl := viper.GetInt("ttl")
 
 		if apiURL == "" || apiKey == "" {
 			logger.Fatal("API URL and API Key must be configured.")
@@ -23,7 +24,7 @@ var knockCmd = &cobra.Command{
 		client := api.NewClient(apiURL, apiKey)
 
 		logger.Println("Manually knocking to whitelist IP...")
-		knockResponse, err := client.Knock("", 0)
+		knockResponse, err := client.Knock("", ttl)
 		if err != nil {
 			logger.Fatalf("Failed to knock: %v", err)
 		}

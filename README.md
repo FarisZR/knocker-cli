@@ -68,6 +68,7 @@ api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
 interval: 5 # in minutes
 ip_check_url: "" # optional, e.g. "https://ifconfig.me"
+ttl: 0 # optional, time to live in seconds for the knock request (0 for server default)
 ```
 
 ### Environment Variables
@@ -78,6 +79,7 @@ You can also configure `knocker-cli` using environment variables:
 - `KNOCKER_API_KEY`: Your API key.
 - `KNOCKER_INTERVAL`: The interval in minutes to check for IP changes.
 - `KNOCKER_IP_CHECK_URL`: Optional URL of the external IP checker service.
+- `KNOCKER_TTL`: Optional time to live in seconds for the knock request (0 for server default).
 
 ## Usage
 
