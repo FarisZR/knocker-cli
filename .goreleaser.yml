@@ -10,10 +10,33 @@ builds:
     goos:
       - linux
       - windows
-      - darwin
     goarch:
       - amd64
       - arm64
+  - id: knocker_darwin_amd64
+    main: ./cmd/knocker
+    binary: knocker
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+  - id: knocker_darwin_arm64
+    main: ./cmd/knocker
+    binary: knocker
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - arm64
+universal_binaries:
+  - id: knocker_darwin_universal
+    ids:
+      - knocker_darwin_amd64
+      - knocker_darwin_arm64
+    replace: true
 archives:
   - format: tar.gz
     name_template: >-
