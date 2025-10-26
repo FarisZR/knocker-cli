@@ -64,8 +64,10 @@ func (s *Service) checkAndKnock() {
 	// The remote API will use the request's source IP.
 	if s.ipCheckURL == "" {
 		s.Logger.Println("Knocking without IP check...")
-		if _, err := s.APIClient.Knock("", s.ttl); err != nil {
+		if knockResponse, err := s.APIClient.Knock("", s.ttl); err != nil {
 			s.Logger.Printf("Knock failed: %v", err)
+		} else if knockResponse != nil {
+			s.Logger.Printf("Successfully knocked. Whitelisted entry: %s (ttl: %d seconds)", knockResponse.WhitelistedEntry, knockResponse.ExpiresInSeconds)
 		}
 		return
 	}
@@ -83,11 +85,14 @@ func (s *Service) checkAndKnock() {
 			s.Logger.Printf("Health check failed: %v", err)
 			return
 		}
-		if _, err := s.APIClient.Knock(ip, s.ttl); err != nil {
+		if knockResponse, err := s.APIClient.Knock(ip, s.ttl); err != nil {
 			s.Logger.Printf("Knock failed: %v", err)
 			return
+		} else if knockResponse != nil {
+			s.Logger.Printf("Successfully knocked and updated IP. Whitelisted entry: %s (ttl: %d seconds)", knockResponse.WhitelistedEntry, knockResponse.ExpiresInSeconds)
+		} else {
+			s.Logger.Println("Successfully knocked and updated IP.")
 		}
 		s.lastIP = ip
-		s.Logger.Println("Successfully knocked and updated IP.")
 	}
 }

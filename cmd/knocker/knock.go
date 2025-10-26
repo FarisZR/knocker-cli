@@ -29,8 +29,8 @@ var knockCmd = &cobra.Command{
 			logger.Fatalf("Failed to knock: %v", err)
 		}
 
-		logger.Printf("Successfully knocked. Whitelisted entry: %s", knockResponse.WhitelistedEntry)
-		fmt.Println("Successfully knocked and whitelisted IP.")
+		logger.Printf("Successfully knocked. Whitelisted entry: %s (ttl: %d seconds)", knockResponse.WhitelistedEntry, knockResponse.ExpiresInSeconds)
+		fmt.Printf("Successfully knocked and whitelisted IP. TTL: %d seconds\n", knockResponse.ExpiresInSeconds)
 	},
 }
 
