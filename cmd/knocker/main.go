@@ -7,6 +7,7 @@ import (
 
 	"github.com/FarisZR/knocker-cli/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -22,6 +23,7 @@ var rootCmd = &cobra.Command{
 	Long: `A reliable, cross-platform service that keeps your external IP address whitelisted.
 It runs in the background, detects IP changes, and ensures you always have access.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		applyConfigDefaults(cmd, viper.GetViper())
 		logger = log.New(os.Stdout, "knocker: ", log.LstdFlags)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -35,6 +37,28 @@ func Execute() {
 		fmt.Fprintf(os.Stderr, "Whoops. There was an error while executing your CLI '%s'", err)
 		os.Exit(1)
 	}
+}
+
+func applyConfigDefaults(cmd *cobra.Command, v *viper.Viper) {
+	if cmd == nil {
+		return
+	}
+
+	// Apply to current command flags.
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if !flag.Changed && v.IsSet(flag.Name) {
+			cmd.Flags().Set(flag.Name, v.GetString(flag.Name))
+		}
+	})
+
+	// Apply to persistent flags declared on this command.
+	cmd.PersistentFlags().VisitAll(func(flag *pflag.Flag) {
+		if !flag.Changed && v.IsSet(flag.Name) {
+			cmd.PersistentFlags().Set(flag.Name, v.GetString(flag.Name))
+		}
+	})
+
+	applyConfigDefaults(cmd.Parent(), v)
 }
 
 func init() {
