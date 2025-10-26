@@ -66,7 +66,7 @@ Create a file named `.knocker.yaml` in your home directory with the following co
 ```yaml
 api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
-interval: 5 # in minutes
+interval: 5 # The interval in minutes to check for IP changes.
 ip_check_url: "" # optional, e.g. "https://ifconfig.me"
 ttl: 0 # optional, time to live in seconds for the knock request (0 for server default)
 ```
