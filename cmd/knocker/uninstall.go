@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -10,20 +12,20 @@ var uninstallCmd = &cobra.Command{
 	Short: "Uninstall the Knocker service",
 	Long:  `This command uninstalls the Knocker service from the host system.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		svcConfig := &service.Config{
-			Name:        "Knocker",
-			DisplayName: "Knocker IP Whitelist Service",
-			Description: "Automatically whitelists the external IP of this device.",
-		}
-
-		prg := &program{}
-		s, err := service.New(prg, svcConfig)
+		s, err := newServiceInstance(false)
 		if err != nil {
 			logger.Fatal(err)
 		}
 
-		err = s.Uninstall()
-		if err != nil {
+		if stopErr := s.Stop(); stopErr != nil && !errors.Is(stopErr, service.ErrNotInstalled) {
+			logger.Printf("Warning: could not stop service prior to uninstall: %v", stopErr)
+		}
+
+		if err := s.Uninstall(); err != nil {
+			if errors.Is(err, service.ErrNotInstalled) {
+				logger.Println("Service not installed, nothing to uninstall.")
+				return
+			}
 			logger.Fatal(err)
 		}
 

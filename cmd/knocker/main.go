@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/FarisZR/knocker-cli/internal/config"
+	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -27,8 +28,21 @@ It runs in the background, detects IP changes, and ensures you always have acces
 		logger = log.New(os.Stdout, "knocker: ", log.LstdFlags)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// Default command logic (e.g., show help)
-		cmd.Help()
+		if !service.Interactive() {
+			s, err := newServiceInstance(false)
+			if err != nil {
+				logger.Fatalf("unable to initialise service runtime: %v", err)
+			}
+
+			if err := s.Run(); err != nil {
+				logger.Fatalf("service run failed: %v", err)
+			}
+			return
+		}
+
+		if err := cmd.Help(); err != nil {
+			logger.Printf("unable to show help: %v", err)
+		}
 	},
 }
 

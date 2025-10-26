@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -10,20 +9,12 @@ var runCmd = &cobra.Command{
 	Short: "Run the Knocker service",
 	Long:  `This command starts the Knocker service, which will run in the foreground.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		svcConfig := &service.Config{
-			Name:        "Knocker",
-			DisplayName: "Knocker IP Whitelist Service",
-			Description: "Automatically whitelists the external IP of this device.",
-		}
-
-		prg := &program{}
-		s, err := service.New(prg, svcConfig)
+		s, err := newServiceInstance(false)
 		if err != nil {
 			logger.Fatal(err)
 		}
 
-		err = s.Run()
-		if err != nil {
+		if err := s.Run(); err != nil {
 			logger.Fatal(err)
 		}
 	},
