@@ -1,0 +1,60 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'knocker'
+      - 'scripts/**'
+      - 'Makefile'
+  pull_request:
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'knocker'
+      - 'scripts/**'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    name: Build snapshot artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser (snapshot)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish --skip=announce
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: knocker-dist-${{ github.run_id }}
+          path: dist/
+          if-no-files-found: error
