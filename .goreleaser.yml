@@ -2,7 +2,10 @@ before:
   hooks:
     - go mod tidy
 builds:
-  - env:
+  - id: knocker
+    main: ./cmd/knocker
+    binary: knocker
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -23,6 +26,24 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
+nfpms:
+  - id: packages
+    package_name: knocker
+    vendor: FarisZR
+    homepage: https://github.com/FarisZR/knocker-cli
+    maintainer: FarisZR <35614734+FarisZR@users.noreply.github.com>
+    description: A reliable, cross-platform service that keeps your external IP address whitelisted.
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/knocker/LICENSE
+    scripts:
+      postinstall: scripts/postinstall.sh
+      preremove: scripts/preremove.sh
 checksum:
   name_template: 'checksums.txt'
 snapshot:

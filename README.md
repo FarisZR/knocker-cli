@@ -68,6 +68,7 @@ api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
 interval: 5 # in minutes
 ip_check_url: "" # optional, e.g. "https://ifconfig.me"
+ttl: 0 # optional, time to live in seconds for the knock request (0 for server default)
 ```
 
 ### Environment Variables
@@ -78,6 +79,11 @@ You can also configure `knocker-cli` using environment variables:
 - `KNOCKER_API_KEY`: Your API key.
 - `KNOCKER_INTERVAL`: The interval in minutes to check for IP changes.
 - `KNOCKER_IP_CHECK_URL`: Optional URL of the external IP checker service.
+- `KNOCKER_TTL`: Optional time to live in seconds for the knock request (0 for server default).
+
+When running as the packaged systemd user service, these variables can be placed in `~/.config/knocker/env` using the standard `KEY=value` format.
+
+Setting a non-zero `ttl` automatically shortens the knock interval so that a knock is issued when roughly 90% of the TTL has elapsed (leaving a 10% buffer before expiry) while never exceeding the configured interval.
 
 ## Usage
 
@@ -99,6 +105,26 @@ knocker knock
 
 ```bash
 knocker install
+```
+
+> **Note:** On Linux the installer registers a per-user systemd unit at `~/.config/systemd/user/knocker.service`. Start it immediately with `systemctl --user enable --now knocker`. On macOS the installer writes `~/Library/LaunchAgents/knocker.plist`; load it with `launchctl bootstrap gui/$UID ~/Library/LaunchAgents/knocker.plist`.
+
+### Start the installed service
+
+```bash
+knocker start
+```
+
+### Stop the running service
+
+```bash
+knocker stop
+```
+
+### Uninstall the service
+
+```bash
+knocker uninstall
 ```
 
 ### Check service status

@@ -1,9 +1,8 @@
 package main
 
 import (
-	"os"
+	"runtime"
 
-	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -12,29 +11,23 @@ var installCmd = &cobra.Command{
 	Short: "Install the Knocker service",
 	Long:  `This command installs the Knocker service on the host system.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		executable, err := os.Executable()
-		if err != nil {
-			logger.Fatalf("Could not find executable path: %v", err)
-		}
-		svcConfig := &service.Config{
-			Name:        "Knocker",
-			DisplayName: "Knocker IP Whitelist Service",
-			Description: "Automatically whitelists the external IP of this device.",
-			Executable:  executable,
-		}
-
-		prg := &program{}
-		s, err := service.New(prg, svcConfig)
+		s, err := newServiceInstance(true)
 		if err != nil {
 			logger.Fatal(err)
 		}
 
-		err = s.Install()
-		if err != nil {
+		if err := s.Install(); err != nil {
 			logger.Fatal(err)
 		}
 
 		logger.Println("Service installed successfully.")
+
+		switch runtime.GOOS {
+		case "linux":
+			logger.Println("Hint: use `systemctl --user enable --now knocker` to start the service immediately.")
+		case "darwin":
+			logger.Println("Hint: use `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/knocker.plist` to load the agent.")
+		}
 	},
 }
 

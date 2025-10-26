@@ -1,0 +1,21 @@
+# Binaries
+/knocker
+knocker.exe
+
+# Build artifacts
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+*.out
+coverage.html
