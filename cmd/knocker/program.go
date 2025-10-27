@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 
 	"github.com/FarisZR/knocker-cli/internal/api"
@@ -11,16 +12,22 @@ import (
 )
 
 type program struct {
-	quit chan struct{}
+	quit    chan struct{}
+	mu      sync.RWMutex
+	service *internalService.Service
 }
 
 func (p *program) Start(s service.Service) error {
 	logger.Println("Starting Knocker service...")
+	p.mu.Lock()
 	p.quit = make(chan struct{})
-	go p.run()
+	quit := p.quit
+	p.mu.Unlock()
+
+	go p.run(quit)
 	return nil
 }
-func (p *program) run() {
+func (p *program) run(quit <-chan struct{}) {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
 	ipGetter := util.NewIPGetter()
 	configuredInterval := time.Duration(viper.GetInt("interval")) * time.Minute
@@ -43,12 +50,34 @@ func (p *program) run() {
 	}
 	logger.Println("API health check successful.")
 
-	knockerService := internalService.NewService(apiClient, ipGetter, effectiveInterval, ipCheckURL, ttl, logger)
+	knockerService := internalService.NewService(apiClient, ipGetter, effectiveInterval, ipCheckURL, ttl, version, logger)
 
-	knockerService.Run(p.quit)
+	p.mu.Lock()
+	p.service = knockerService
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		p.service = nil
+		p.mu.Unlock()
+	}()
+
+	knockerService.Run(quit)
 }
 func (p *program) Stop(s service.Service) error {
 	logger.Println("Stopping Knocker service...")
-	close(p.quit)
+	p.mu.RLock()
+	svc := p.service
+	p.mu.RUnlock()
+	if svc != nil {
+		svc.NotifyStopping()
+		svc.Stop()
+	}
+
+	p.mu.Lock()
+	if p.quit != nil {
+		close(p.quit)
+		p.quit = nil
+	}
+	p.mu.Unlock()
 	return nil
 }

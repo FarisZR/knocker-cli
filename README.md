@@ -9,6 +9,7 @@
 - **Cross-Platform:** Built to be cross-platform with priority for Linux and macOS.
 - **Docker Support:** Can be run in a Docker container.
 - **Manual Whitelisting:** Manually trigger a whitelist request at any time.
+- **Structured journald events:** Emits machine-readable journald events alongside human logs for desktop integrations.
 
 ## How It Works
 
@@ -18,9 +19,9 @@
 
 This is the default and recommended mode of operation.
 
-1.  The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
-2.  The service **does not** check its own IP address.
-3.  Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
+1. The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
+2. The service **does not** check its own IP address.
+3. Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
 
 In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whitelist entry fresh.
 
@@ -28,11 +29,11 @@ In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whi
 
 This mode is for more advanced use cases where you want the client to be responsible for detecting IP changes.
 
-1.  To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
-2.  The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
-3.  At each interval, it fetches the IP again.
-4.  It compares the new IP with the one stored in memory.
-5.  If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
+1. To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
+2. The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
+3. At each interval, it fetches the IP again.
+4. It compares the new IP with the one stored in memory.
+5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
 
 ## Installation
 
@@ -84,6 +85,22 @@ You can also configure `knocker-cli` using environment variables:
 When running as the packaged systemd user service, these variables can be placed in `~/.config/knocker/env` using the standard `KEY=value` format.
 
 Setting a non-zero `ttl` automatically shortens the knock interval so that a knock is issued when roughly 90% of the TTL has elapsed (leaving a 10% buffer before expiry) while never exceeding the configured interval.
+
+## Structured journald events
+
+When the service runs under systemd (for example as `knocker.service`), every operational log is mirrored to journald with a human-friendly `MESSAGE` and a stable set of `KNOCKER_*` fields. These events let desktop integrations such as GNOME shell extensions consume Knocker state without polling a separate API.
+
+- **Stream the events:** `journalctl --user -u knocker.service -o json -f | jq 'select(.KNOCKER_EVENT != null)'` to follow only structured entries, or pin to a specific type with `KNOCKER_EVENT=StatusSnapshot` as needed (`journalctl` only supports `FIELD=value` comparisons per its manual).
+- **Schema version:** All entries include `KNOCKER_SCHEMA_VERSION=1` for forward compatibility.
+- **Event types:**
+  - `ServiceState` — lifecycle notifications (`started`, `stopping`, `stopped`) with optional `KNOCKER_VERSION`.
+  - `StatusSnapshot` — current whitelist, TTL, and next scheduled knock.
+  - `WhitelistApplied` / `WhitelistExpired` — whitelist changes with expiry metadata.
+  - `NextKnockUpdated` — upcoming knock timestamp (or `0` when cleared).
+  - `KnockTriggered` — manual (`cli`) and scheduled (`schedule`) knocks with success/failure result.
+  - `Error` — surfaced issues that should be shown in the UI.
+
+Manual invocations of `knocker knock` produce the same `KnockTriggered` and `WhitelistApplied` events so external consumers stay in sync even when the background service is idle.
 
 ## Usage
 

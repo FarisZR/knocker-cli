@@ -40,16 +40,15 @@ func TestServiceRun(t *testing.T) {
 	defer server.Close()
 
 	// Create a new service with mocked dependencies
-	service := &Service{
-		APIClient:  api.NewClient(server.URL, "test-key"),
-		IPGetter:   &mockIPGetter{},
-		Interval:   1 * time.Millisecond, // Run once and exit
-		Logger:     log.New(os.Stdout, "test: ", log.LstdFlags),
-		stop:       make(chan struct{}),
-		lastIP:     "",
-		ipCheckURL: server.URL,
-		ttl:        3600,
-	}
+	service := NewService(
+		api.NewClient(server.URL, "test-key"),
+		&mockIPGetter{},
+		1*time.Millisecond,
+		server.URL,
+		3600,
+		"test",
+		log.New(os.Stdout, "test: ", log.LstdFlags),
+	)
 
 	// Create a quit channel for the test
 	quit := make(chan struct{})
@@ -61,7 +60,7 @@ func TestServiceRun(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Stop the service
-	close(service.stop)
+	service.Stop()
 
 	// Assert that the IP was updated
 	assert.Equal(t, "1.2.3.4", service.lastIP)

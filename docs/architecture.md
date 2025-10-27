@@ -60,6 +60,20 @@ The `internal/util` package contains a utility for fetching the public IP addres
 - **GoReleaser**: The project uses GoReleaser to automate the build and release process. The `.goreleaser.yml` file defines how to build binaries for different platforms, create archives, and generate release notes.
 - **Docker**: A multi-stage `Dockerfile` is provided to create a minimal, containerized version of the application for easy deployment.
 
+### 8. Structured Journald Events
+
+Linux deployments run the service as a systemd user unit. To support UI integrations (e.g. a GNOME Shell extension) the runtime mirrors critical state changes to journald with structured metadata. The `internal/journald` package wraps `github.com/coreos/go-systemd/v22/journal` behind a small abstraction so non-Linux builds compile with a stub.
+
+- Every structured entry carries both the human-readable message and a machine contract based on `KNOCKER_*` fields. The schema version is frozen at `KNOCKER_SCHEMA_VERSION=1`.
+- The core service emits:
+    - `ServiceState` when entering `started`, `stopping`, or `stopped` transitions (including `KNOCKER_VERSION`).
+    - `StatusSnapshot` whenever material state changes (whitelist, TTL, next knock timestamp) so consumers can seed their UI.
+    - `WhitelistApplied`, `WhitelistExpired`, `NextKnockUpdated`, and `KnockTriggered` as the whitelist lifecycle evolves.
+    - `Error` whenever a problem (IP lookup, health check, knock) should surface in the UI, tagged with `KNOCKER_ERROR_CODE`.
+- Manual invocations of `knocker knock` reuse the same contract, emitting `KnockTriggered` and `WhitelistApplied` events from the CLI path to keep consumers in sync even if the background service is idle.
+
+Consumers can tail these events with `journalctl --user -u knocker.service KNOCKER_EVENT= -o json` and update their state using the accompanying structured fields.
+
 ## How It Works: IP Change Detection
 
 `knocker-cli` operates in two distinct modes for handling IP changes:
