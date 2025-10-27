@@ -19,11 +19,15 @@ type program struct {
 
 func (p *program) Start(s service.Service) error {
 	logger.Println("Starting Knocker service...")
+	p.mu.Lock()
 	p.quit = make(chan struct{})
-	go p.run()
+	quit := p.quit
+	p.mu.Unlock()
+
+	go p.run(quit)
 	return nil
 }
-func (p *program) run() {
+func (p *program) run(quit <-chan struct{}) {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
 	ipGetter := util.NewIPGetter()
 	configuredInterval := time.Duration(viper.GetInt("interval")) * time.Minute
@@ -57,7 +61,7 @@ func (p *program) run() {
 		p.mu.Unlock()
 	}()
 
-	knockerService.Run(p.quit)
+	knockerService.Run(quit)
 }
 func (p *program) Stop(s service.Service) error {
 	logger.Println("Stopping Knocker service...")
