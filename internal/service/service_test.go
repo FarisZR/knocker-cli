@@ -46,6 +46,7 @@ func TestServiceRun(t *testing.T) {
 		1*time.Millisecond,
 		server.URL,
 		3600,
+		"check_interval",
 		"test",
 		log.New(os.Stdout, "test: ", log.LstdFlags),
 	)
@@ -64,4 +65,63 @@ func TestServiceRun(t *testing.T) {
 
 	// Assert that the IP was updated
 	assert.Equal(t, "1.2.3.4", service.lastIP)
+}
+
+func TestServiceAdjustsCadenceFromServerTTL(t *testing.T) {
+	logger := log.New(os.Stdout, "test: ", log.LstdFlags)
+	service := NewService(
+		nil,
+		&mockIPGetter{},
+		5*time.Minute,
+		"",
+		600,
+		"ttl",
+		"test",
+		logger,
+	)
+
+	response := &api.KnockResponse{
+		WhitelistedEntry: "1.2.3.4",
+		ExpiresAt:        time.Now().Add(10 * time.Minute).Unix(),
+		ExpiresInSeconds: 120,
+	}
+
+	service.handleWhitelistResponse(response, TriggerSourceSchedule)
+
+	expected := KnockCadenceFromTTL(120)
+	if service.Cadence != expected {
+		t.Fatalf("expected cadence %v, got %v", expected, service.Cadence)
+	}
+	if service.cadenceSrc != "ttl_response" {
+		t.Fatalf("expected cadence source ttl_response, got %s", service.cadenceSrc)
+	}
+}
+
+func TestServiceDoesNotAdjustCadenceWhenIPCheckEnabled(t *testing.T) {
+	logger := log.New(os.Stdout, "test: ", log.LstdFlags)
+	service := NewService(
+		nil,
+		&mockIPGetter{},
+		5*time.Minute,
+		"https://example.com",
+		600,
+		"check_interval",
+		"test",
+		logger,
+	)
+
+	response := &api.KnockResponse{
+		WhitelistedEntry: "1.2.3.4",
+		ExpiresAt:        time.Now().Add(10 * time.Minute).Unix(),
+		ExpiresInSeconds: 60,
+	}
+
+	service.handleWhitelistResponse(response, TriggerSourceSchedule)
+
+	if service.Cadence != 5*time.Minute {
+		t.Fatalf("expected cadence to remain unchanged, got %v", service.Cadence)
+	}
+	if service.cadenceSrc != "check_interval" {
+		t.Fatalf("expected cadence source check_interval, got %s", service.cadenceSrc)
+	}
 }

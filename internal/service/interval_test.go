@@ -5,52 +5,43 @@ import (
 	"time"
 )
 
-func TestEffectiveInterval_DefaultsToConfiguredWhenNoTTL(t *testing.T) {
-	configured := 2 * time.Minute
-	result := EffectiveInterval(configured, 0)
-
-	if result != configured {
-		t.Fatalf("expected %v, got %v", configured, result)
+func TestNormalizeCheckInterval_DefaultsOnInvalid(t *testing.T) {
+	if NormalizeCheckInterval(-5*time.Minute) != DefaultCheckInterval() {
+		t.Fatalf("expected default interval for invalid input")
 	}
 }
 
-func TestEffectiveInterval_UsesTenPercentTTLBuffer(t *testing.T) {
-	configured := 5 * time.Minute
-	result := EffectiveInterval(configured, 120)
+func TestNormalizeCheckInterval_PassesThroughValid(t *testing.T) {
+	configured := 7 * time.Minute
+	if NormalizeCheckInterval(configured) != configured {
+		t.Fatalf("expected %v to pass through", configured)
+	}
+}
 
+func TestKnockCadenceFromTTL_DefaultsWhenUnset(t *testing.T) {
+	if KnockCadenceFromTTL(0) != DefaultCheckInterval() {
+		t.Fatalf("expected default cadence when ttl unset")
+	}
+}
+
+func TestKnockCadenceFromTTL_UsesTenPercentBuffer(t *testing.T) {
+	result := KnockCadenceFromTTL(120)
 	expected := 108 * time.Second
 	if result != expected {
 		t.Fatalf("expected %v, got %v", expected, result)
 	}
 }
 
-func TestEffectiveInterval_RespectsConfiguredWhenShorterThanTTLBuffer(t *testing.T) {
-	configured := 20 * time.Second
-	result := EffectiveInterval(configured, 600)
-
-	if result != configured {
-		t.Fatalf("expected %v, got %v", configured, result)
-	}
-}
-
-func TestEffectiveInterval_ProducesExpectedBufferAndMinimums(t *testing.T) {
-	configured := 10 * time.Minute
-	if EffectiveInterval(configured, 1) != 1*time.Second {
-		t.Fatalf("expected 1s interval when ttl=1s")
-	}
-
-	expected := (6 * time.Second * 9) / 10
-	if EffectiveInterval(configured, 6) != expected {
-		t.Fatalf("expected %v interval when ttl=6s", expected)
-	}
-}
-
-func TestEffectiveInterval_ResultDoesNotExceedTTL(t *testing.T) {
-	configured := 10 * time.Minute
-	result := EffectiveInterval(configured, 3)
-
+func TestKnockCadenceFromTTL_DoesNotExceedTTL(t *testing.T) {
+	result := KnockCadenceFromTTL(3)
 	if result > 3*time.Second {
-		t.Fatalf("expected interval <= 3s, got %v", result)
+		t.Fatalf("expected cadence <= ttl, got %v", result)
+	}
+}
+
+func TestKnockCadenceFromTTL_RespectsOneSecondFloor(t *testing.T) {
+	if KnockCadenceFromTTL(1) != 1*time.Second {
+		t.Fatalf("expected 1s cadence when ttl=1s")
 	}
 }
 

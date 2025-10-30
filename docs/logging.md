@@ -38,6 +38,7 @@ Provides the current state snapshot. Emitted at startup and whenever the snapsho
 | `KNOCKER_EXPIRES_UNIX` | Unix timestamp (optional) | Expiry instant for the whitelist entry (seconds since epoch). |
 | `KNOCKER_TTL_SEC` | integer string (optional) | TTL in seconds originally granted by the API. |
 | `KNOCKER_NEXT_AT_UNIX` | Unix timestamp (optional) | Scheduled time for the next automatic knock. |
+| `KNOCKER_CADENCE_SOURCE` | enum (optional) | Indicates whether the schedule comes from `ttl`, the API-provided `ttl_response`, or a configured `check_interval`. |
 | `KNOCKER_PROFILE` | string (optional) | Reserved; profile name when multiple profiles are supported. |
 | `KNOCKER_PORTS` | string (optional) | Comma-separated port list when known. |
 
@@ -68,7 +69,8 @@ Communicates a change to the scheduled next knock.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `KNOCKER_NEXT_AT_UNIX` | Unix timestamp | Seconds since epoch for the next knock. `"0"` indicates the schedule is cleared. |
+| `KNOCKER_NEXT_AT_UNIX` | Unix timestamp | Seconds since epoch for the next knock. "0" indicates the schedule is cleared. |
+| `KNOCKER_CADENCE_SOURCE` | enum (optional) | Mirrors the cadence source reported in the snapshot. |
 | `KNOCKER_PROFILE` | string (optional) | Reserved profile identifier. |
 | `KNOCKER_PORTS` | string (optional) | Comma-separated port list when known. |
 
@@ -116,3 +118,14 @@ Represents an operational error that should be surfaced to the user.
 - Treat field absence as "unknown". New fields may appear over time—ignore what you do not recognise.
 - When multiple events arrive quickly, process `StatusSnapshot` last; it represents the new steady state after individual updates.
 - Use the schema version to gate behaviour when future, incompatible changes are introduced.
+- Prefer `KNOCKER_CADENCE_SOURCE` for determining whether the cadence is TTL-driven or configured via `check_interval`.
+
+## Runtime Logs
+
+In addition to structured journald entries, the service prints human-readable logs. After the cadence changes, look for messages such as:
+
+- `Service running. Knocking every 9m0s (source: ttl).`
+- `Service running. Checking for IP changes every 5m0s (source: check_interval).`
+- `Adjusted knock cadence to 9m0s based on server TTL (540s).`
+
+These logs mirror the cadence source reported in the structured events and help with manual diagnostics.

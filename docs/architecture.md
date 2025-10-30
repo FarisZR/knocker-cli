@@ -26,7 +26,7 @@ The command-line interface is built using the **Cobra** library. It provides the
 
 ### 2. Configuration (Viper)
 
-Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `.knocker.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and the IP check interval.
+Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `.knocker.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and the `check_interval` used when polling for IP changes.
 
 ### 3. Service Management (kardianos/service)
 
@@ -42,10 +42,8 @@ This is the heart of the application, located in the `internal/service` package.
 
 1. **Health Check**: It first checks the `/health` endpoint of the remote API to ensure it is available.
 2. **IP Detection & Knocking**: The service operates in one of two modes:
-    - **Simple Mode (Default):** If no `ip_check_url` is configured, the service sends a "knock" request to the API at each interval. It does not check its own IP. The remote API is responsible for identifying the client's IP from the request and updating the whitelist.
-    - **Comparison Mode (Optional):** If an `ip_check_url` is provided, the service first fetches its public IP from that URL. It compares this IP to the last known IP. If they are different, it then sends a "knock" request to the API to whitelist the new address.
-
-When a configuration TTL is supplied, the loop shortens its effective interval so a knock is issued once roughly 90% of the TTL has elapsed (leaving a 10% buffer) while never running more frequently than configured.
+    - **Simple Mode (Default):** If no `ip_check_url` is configured, the service schedules knocks based on the best-known TTL. It starts with the configured TTL and adjusts to the TTL reported by the API response, aiming to refresh the whitelist when roughly 90% of the TTL has elapsed. When no TTL is known, the loop falls back to a 5-minute cadence. The remote API is responsible for identifying the client's IP from the request and updating the whitelist.
+    - **Comparison Mode (Optional):** If an `ip_check_url` is provided, the service first fetches its public IP from that URL. It compares this IP to the last known IP. If they are different, it then sends a "knock" request to the API to whitelist the new address. The polling cadence in this mode is controlled by the `check_interval` setting.
 
 ### 5. API Client
 
@@ -82,7 +80,7 @@ Consumers can tail these events with `journalctl --user -u knocker.service KNOCK
 
 This is the default and recommended mode of operation.
 
-1. The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
+1. The `knocker-cli` service starts and sends a "knock" request based on the best-known TTL, starting with the configured value and updating when the API returns a TTL. It aims to refresh the whitelist when roughly 90% of the TTL has elapsed (falling back to a 5-minute cadence if the TTL is unset).
 2. The service **does not** check its own IP address.
 3. Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
 
@@ -94,7 +92,9 @@ This mode is for more advanced use cases where you want the client to be respons
 
 1. To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
 2. The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
-3. At each interval, it fetches the IP again.
+3. At each `check_interval`, it fetches the IP again.
 4. It compares the new IP with the one stored in memory.
 5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
+
+During startup the service emits a log line that includes both the calculated cadence and its source (`source: ttl` or `source: check_interval`) to make diagnostics straightforward.
 

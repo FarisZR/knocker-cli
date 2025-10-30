@@ -19,7 +19,7 @@
 
 This is the default and recommended mode of operation.
 
-1. The `knocker-cli` service starts and, at a regular interval (configured by the `interval` setting), sends a "knock" request to your API server.
+1. The `knocker-cli` service starts and sends a "knock" request based on the best-known TTL. It begins with the configured TTL and adjusts to the TTL returned by the API response, aiming to refresh the whitelist when roughly 90% of the TTL has elapsed (falling back to a 5-minute cadence if the TTL is unknown or unset).
 2. The service **does not** check its own IP address.
 3. Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
 
@@ -31,9 +31,11 @@ This mode is for more advanced use cases where you want the client to be respons
 
 1. To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
 2. The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
-3. At each interval, it fetches the IP again.
+3. At each `check_interval`, it fetches the IP again.
 4. It compares the new IP with the one stored in memory.
 5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
+
+At startup the service logs the calculated cadence along with its source (`source: ttl` or `source: check_interval`) so you can confirm which mechanism is driving the schedule.
 
 ## Installation
 
@@ -67,7 +69,7 @@ Create a file named `.knocker.yaml` in your home directory with the following co
 ```yaml
 api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
-interval: 5 # The interval in minutes to check for IP changes.
+check_interval: 5 # The interval in minutes to poll for IP changes when ip_check_url is set.
 ip_check_url: "" # optional, e.g. "https://ifconfig.me"
 ttl: 0 # optional, time to live in seconds for the knock request (0 for server default)
 ```
@@ -78,13 +80,13 @@ You can also configure `knocker-cli` using environment variables:
 
 - `KNOCKER_API_URL`: The URL of the Knocker API.
 - `KNOCKER_API_KEY`: Your API key.
-- `KNOCKER_INTERVAL`: The interval in minutes to check for IP changes.
+- `KNOCKER_CHECK_INTERVAL`: The interval in minutes to poll for IP changes when `ip_check_url` is set.
 - `KNOCKER_IP_CHECK_URL`: Optional URL of the external IP checker service.
 - `KNOCKER_TTL`: Optional time to live in seconds for the knock request (0 for server default).
 
 When running as the packaged systemd user service, these variables can be placed in `~/.config/knocker/env` using the standard `KEY=value` format.
 
-Setting a non-zero `ttl` automatically shortens the knock interval so that a knock is issued when roughly 90% of the TTL has elapsed (leaving a 10% buffer before expiry) while never exceeding the configured interval.
+When `ip_check_url` is unset, the service automatically schedules knocks so that roughly 10% of the TTL remains before expiry. It starts with the configured TTL but updates the cadence whenever the API returns a TTL, falling back to a 5-minute cadence only when no TTL is known. When `ip_check_url` is provided, the `check_interval` controls how frequently the client polls for IP changes and only knocks when the IP actually changes.
 
 ## Structured journald events
 

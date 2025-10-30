@@ -3,29 +3,38 @@ package service
 import "time"
 
 const (
-	defaultInterval     = 5 * time.Minute
-	minInterval         = 5 * time.Second
-	defaultRestartDelay = 30 * time.Second
-	minRestartDelay     = 5 * time.Second
+	defaultCheckInterval = 5 * time.Minute
+	defaultKnockInterval = defaultCheckInterval
+	defaultRestartDelay  = 30 * time.Second
+	minRestartDelay      = 5 * time.Second
 )
 
-// EffectiveInterval ensures the knock loop respects the configured interval while
-// also keeping the whitelist fresh relative to the configured TTL. When a TTL is
-// provided, the interval is shortened so that a knock is scheduled once roughly
-// 90%% of the TTL has elapsed (leaving a 10%% buffer before expiry), but never
-// longer than either the TTL or the configured interval.
-func EffectiveInterval(configured time.Duration, ttlSeconds int) time.Duration {
-	if configured <= 0 {
-		configured = defaultInterval
-	}
+// DefaultCheckInterval exposes the built-in check interval used when the
+// configuration omits a custom value or sets an invalid one.
+func DefaultCheckInterval() time.Duration {
+	return defaultCheckInterval
+}
 
+// NormalizeCheckInterval ensures the configured IP check cadence is usable.
+func NormalizeCheckInterval(configured time.Duration) time.Duration {
+	if configured <= 0 {
+		return defaultCheckInterval
+	}
+	return configured
+}
+
+// KnockCadenceFromTTL derives the knock schedule based on the configured TTL.
+// A 10%% buffer is maintained so the whitelist is refreshed before expiry. The
+// cadence never exceeds the TTL itself and bottoms out at one second to avoid
+// zero-duration tickers.
+func KnockCadenceFromTTL(ttlSeconds int) time.Duration {
 	if ttlSeconds <= 0 {
-		return configured
+		return defaultKnockInterval
 	}
 
 	ttlDuration := time.Duration(ttlSeconds) * time.Second
 	if ttlDuration <= 0 {
-		return configured
+		return defaultKnockInterval
 	}
 
 	adjusted := ttlDuration - (ttlDuration / 10) // aim to knock with 10% TTL remaining
@@ -35,18 +44,11 @@ func EffectiveInterval(configured time.Duration, ttlSeconds int) time.Duration {
 	if adjusted < time.Second {
 		adjusted = time.Second
 	}
-	if ttlDuration >= minInterval && adjusted < minInterval {
-		adjusted = minInterval
-	}
 	if adjusted > ttlDuration {
 		adjusted = ttlDuration
 	}
 
-	if adjusted < configured {
-		return adjusted
-	}
-
-	return configured
+	return adjusted
 }
 
 // RestartDelay derives a reasonable restart back-off for managed services based on the TTL.

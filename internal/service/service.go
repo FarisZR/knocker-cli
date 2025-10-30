@@ -16,8 +16,9 @@ type IPGetter interface {
 type Service struct {
 	APIClient  *api.Client
 	IPGetter   IPGetter
-	Interval   time.Duration
+	Cadence    time.Duration
 	Logger     *log.Logger
+	cadenceSrc string
 	stop       chan struct{}
 	lastIP     string
 	ipCheckURL string
@@ -31,12 +32,13 @@ type Service struct {
 	shutdownOnce sync.Once
 }
 
-func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration, ipCheckURL string, ttl int, version string, logger *log.Logger) *Service {
+func NewService(apiClient *api.Client, ipGetter IPGetter, cadence time.Duration, ipCheckURL string, ttl int, cadenceSource string, version string, logger *log.Logger) *Service {
 	return &Service{
 		APIClient:  apiClient,
 		IPGetter:   ipGetter,
-		Interval:   interval,
+		Cadence:    cadence,
 		Logger:     logger,
+		cadenceSrc: cadenceSource,
 		stop:       make(chan struct{}),
 		ipCheckURL: ipCheckURL,
 		ttl:        ttl,
@@ -45,17 +47,21 @@ func NewService(apiClient *api.Client, ipGetter IPGetter, interval time.Duration
 }
 
 func (s *Service) Run(quit <-chan struct{}) {
+	source := s.cadenceSrc
+	if source == "" {
+		source = "ttl"
+	}
 	if s.ipCheckURL == "" {
-		s.Logger.Printf("Service running. Knocking every %v (no ip_check_url set).", s.Interval)
+		s.Logger.Printf("Service running. Knocking every %v (source: %s).", s.Cadence, source)
 	} else {
-		s.Logger.Printf("Service running. Checking for IP changes every %v.", s.Interval)
+		s.Logger.Printf("Service running. Checking for IP changes every %v (source: %s).", s.Cadence, source)
 	}
 
 	s.emitServiceState(ServiceStateStarted)
-	s.updateNextKnock(time.Now().Add(s.Interval))
+	s.updateNextKnock(time.Now().Add(s.Cadence))
 	s.emitStatusSnapshot()
 
-	ticker := time.NewTicker(s.Interval)
+	ticker := time.NewTicker(s.Cadence)
 	defer ticker.Stop()
 	defer func() {
 		s.clearNextKnock()
@@ -66,9 +72,11 @@ func (s *Service) Run(quit <-chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			s.checkWhitelistExpiry(time.Now())
+			now := time.Now()
+			s.checkWhitelistExpiry(now)
 			s.checkAndKnock()
-			s.updateNextKnock(time.Now().Add(s.Interval))
+			ticker.Reset(s.Cadence)
+			s.updateNextKnock(time.Now().Add(s.Cadence))
 		case <-quit:
 			s.NotifyStopping()
 			s.checkWhitelistExpiry(time.Now())
@@ -173,8 +181,28 @@ func (s *Service) handleWhitelistResponse(knockResponse *api.KnockResponse, sour
 		Source:      source,
 	}
 
+	s.adjustCadenceForTTL(knockResponse.ExpiresInSeconds)
+
 	s.emitWhitelistApplied(knockResponse.WhitelistedEntry, knockResponse.ExpiresInSeconds, knockResponse.ExpiresAt, source)
 	s.emitStatusSnapshot()
+}
+
+func (s *Service) adjustCadenceForTTL(ttlSeconds int) {
+	if s.ipCheckURL != "" {
+		return
+	}
+	if ttlSeconds <= 0 {
+		return
+	}
+
+	newCadence := KnockCadenceFromTTL(ttlSeconds)
+	if newCadence == s.Cadence {
+		return
+	}
+
+	s.Cadence = newCadence
+	s.cadenceSrc = "ttl_response"
+	s.Logger.Printf("Adjusted knock cadence to %v based on server TTL (%ds).", newCadence, ttlSeconds)
 }
 
 func (s *Service) checkWhitelistExpiry(now time.Time) {

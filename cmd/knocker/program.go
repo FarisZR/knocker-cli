@@ -30,18 +30,20 @@ func (p *program) Start(s service.Service) error {
 func (p *program) run(quit <-chan struct{}) {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
 	ipGetter := util.NewIPGetter()
-	configuredInterval := time.Duration(viper.GetInt("interval")) * time.Minute
+	configuredCheckInterval := time.Duration(viper.GetInt("check_interval")) * time.Minute
 	ipCheckURL := viper.GetString("ip_check_url")
 	ttl := viper.GetInt("ttl")
 
-	if configuredInterval <= 0 {
-		logger.Println("Invalid interval detected, defaulting to 5 minutes.")
-		configuredInterval = 5 * time.Minute
+	checkInterval := internalService.NormalizeCheckInterval(configuredCheckInterval)
+	if checkInterval != configuredCheckInterval {
+		logger.Printf("Invalid check interval detected, defaulting to %v.", checkInterval)
 	}
 
-	effectiveInterval := internalService.EffectiveInterval(configuredInterval, ttl)
-	if effectiveInterval != configuredInterval {
-		logger.Printf("Adjusting interval from %v to %v based on ttl=%ds.", configuredInterval, effectiveInterval, ttl)
+	knockCadence := internalService.KnockCadenceFromTTL(ttl)
+	cadenceSource := "ttl"
+	if ipCheckURL != "" {
+		knockCadence = checkInterval
+		cadenceSource = "check_interval"
 	}
 
 	// Perform initial health check
@@ -50,7 +52,7 @@ func (p *program) run(quit <-chan struct{}) {
 	}
 	logger.Println("API health check successful.")
 
-	knockerService := internalService.NewService(apiClient, ipGetter, effectiveInterval, ipCheckURL, ttl, version, logger)
+	knockerService := internalService.NewService(apiClient, ipGetter, knockCadence, ipCheckURL, ttl, cadenceSource, version, logger)
 
 	p.mu.Lock()
 	p.service = knockerService
