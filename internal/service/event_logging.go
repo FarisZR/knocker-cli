@@ -85,6 +85,9 @@ func (s *Service) emitStatusSnapshot() {
 	if s.nextKnockUnix > 0 {
 		fields["KNOCKER_NEXT_AT_UNIX"] = strconv.FormatInt(s.nextKnockUnix, 10)
 	}
+	if s.cadenceSrc != "" {
+		fields["KNOCKER_CADENCE_SOURCE"] = s.cadenceSrc
+	}
 	s.emit(EventStatusSnapshot, "Status snapshot", journald.PriInfo, fields)
 }
 
@@ -146,6 +149,10 @@ func (s *Service) emitNextKnockUpdated(next time.Time) {
 		unix := next.Unix()
 		fields["KNOCKER_NEXT_AT_UNIX"] = strconv.FormatInt(unix, 10)
 		message = fmt.Sprintf("Next knock at %s", next.UTC().Format(time.RFC3339))
+	}
+
+	if s.cadenceSrc != "" {
+		fields["KNOCKER_CADENCE_SOURCE"] = s.cadenceSrc
 	}
 
 	s.emit(EventNextKnockUpdated, message, journald.PriInfo, fields)
