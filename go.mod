@@ -3,7 +3,7 @@ module github.com/FarisZR/knocker-cli
 go 1.24.6
 
 require (
-	github.com/coreos/go-systemd/v22 v22.5.0
+	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/kardianos/service v1.2.4
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
