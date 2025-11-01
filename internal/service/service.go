@@ -58,6 +58,8 @@ func (s *Service) Run(quit <-chan struct{}) {
 	}
 
 	s.emitServiceState(ServiceStateStarted)
+	// Trigger the first knock immediately so the whitelist is refreshed on startup.
+	s.checkAndKnock()
 	s.updateNextKnock(time.Now().Add(s.Cadence))
 	s.emitStatusSnapshot()
 

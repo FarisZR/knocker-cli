@@ -67,6 +67,54 @@ func TestServiceRun(t *testing.T) {
 	assert.Equal(t, "1.2.3.4", service.lastIP)
 }
 
+func TestServiceKnocksImmediatelyOnStart(t *testing.T) {
+	knockCh := make(chan struct{}, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			w.WriteHeader(http.StatusOK)
+		case "/knock":
+			select {
+			case knockCh <- struct{}{}:
+			default:
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(api.KnockResponse{
+				WhitelistedEntry: "1.2.3.4",
+				ExpiresAt:        time.Now().Add(time.Hour).Unix(),
+				ExpiresInSeconds: 3600,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	service := NewService(
+		api.NewClient(server.URL, "test-key"),
+		&mockIPGetter{},
+		time.Hour,
+		"",
+		3600,
+		"ttl",
+		"test",
+		log.New(os.Stdout, "test: ", log.LstdFlags),
+	)
+
+	quit := make(chan struct{})
+	go service.Run(quit)
+
+	select {
+	case <-knockCh:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected initial scheduled knock on service start")
+	}
+
+	service.Stop()
+	close(quit)
+}
+
 func TestServiceAdjustsCadenceFromServerTTL(t *testing.T) {
 	logger := log.New(os.Stdout, "test: ", log.LstdFlags)
 	service := NewService(

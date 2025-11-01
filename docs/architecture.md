@@ -38,7 +38,7 @@ On Linux the installer targets the user-level systemd instance, producing `~/.co
 
 ### 4. Core Service Logic
 
-This is the heart of the application, located in the `internal/service` package. It contains the main loop that periodically performs the following actions:
+This is the heart of the application, located in the `internal/service` package. It contains the main loop that periodically performs the following actions. On startup the service issues its first knock immediately before scheduling the cadence timer, so restarts refresh the whitelist without waiting for the first interval.
 
 1. **Health Check**: It first checks the `/health` endpoint of the remote API to ensure it is available.
 2. **IP Detection & Knocking**: The service operates in one of two modes:

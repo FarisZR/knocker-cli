@@ -15,6 +15,8 @@
 
 `knocker-cli` operates in two distinct modes for handling IP changes:
 
+When the service starts it immediately performs a scheduled knock before arming its cadence timer, so a restart refreshes the whitelist without waiting for the next interval.
+
 ### Simple Mode (Default)
 
 This is the default and recommended mode of operation.
