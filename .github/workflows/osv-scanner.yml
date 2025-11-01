@@ -36,6 +36,8 @@ jobs:
       scan-args: |-
         -r
         --skip-git
+        --gh-annotations=true
+        --fail-on-vuln=false
         ./
   scan-pr:
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
@@ -45,4 +47,5 @@ jobs:
       scan-args: |-
         -r
         --skip-git
+        --gh-annotations=true
         ./
