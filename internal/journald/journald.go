@@ -2,6 +2,8 @@ package journald
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"sync/atomic"
 	"syscall"
 )
@@ -47,6 +49,10 @@ var journaldDisabled atomic.Bool
 func Emit(eventType, message string, priority Priority, fields Fields) error {
 	if journaldDisabled.Load() {
 		return nil
+	}
+
+	if len(fields) > math.MaxInt-3 {
+		return fmt.Errorf("too many fields in journald entry: %d > %d", len(fields), math.MaxInt-3)
 	}
 
 	payload := make(Fields, len(fields)+3)
