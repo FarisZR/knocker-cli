@@ -2,6 +2,7 @@ package journald
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"syscall"
 )
@@ -31,6 +32,7 @@ const (
 	// journald entries.
 	SchemaVersion     = "1"
 	defaultIdentifier = "knocker"
+	maxFieldsCount    = 1024
 )
 
 // Enabled reports whether structured journald logging is available on the
@@ -47,6 +49,10 @@ var journaldDisabled atomic.Bool
 func Emit(eventType, message string, priority Priority, fields Fields) error {
 	if journaldDisabled.Load() {
 		return nil
+	}
+
+	if len(fields) > maxFieldsCount {
+		return fmt.Errorf("too many fields in journald entry: %d > %d", len(fields), maxFieldsCount)
 	}
 
 	payload := make(Fields, len(fields)+3)
