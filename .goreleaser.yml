@@ -1,6 +1,7 @@
-before:
-  hooks:
-    - go mod tidy
+version: 2
+
+# The tap relies on these stable archive names, independent of the checkout folder.
+project_name: knocker-cli
 builds:
   - id: knocker
     main: ./cmd/knocker
@@ -38,7 +39,8 @@ universal_binaries:
       - knocker_darwin_arm64
     replace: true
 archives:
-  - format: tar.gz
+  - id: release-archives
+    formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -48,7 +50,7 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 nfpms:
   - id: packages
     package_name: knocker
@@ -69,6 +71,7 @@ nfpms:
       preremove: scripts/preremove.sh
 checksum:
   name_template: 'checksums.txt'
+  algorithm: sha256
 changelog:
   sort: asc
   filters:

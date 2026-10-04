@@ -56,6 +56,7 @@ The `internal/util` package contains a utility for fetching the public IP addres
 ### 7. Build and Release (GoReleaser & Docker)
 
 - **GoReleaser**: The project uses GoReleaser to automate the build and release process. The `.goreleaser.yml` file defines how to build binaries for different platforms, create archives, and generate release notes.
+- **Homebrew tap**: The GoReleaser v2 config pins `project_name: knocker-cli`, preserving the Linux x86_64/arm64 archive names and SHA-256 checksums consumed by `FarisZR/tap`. The release workflow builds the requested tag and dispatches the tap's sync workflow only after publishing succeeds. `TAP_GITHUB_TOKEN` needs only Actions read/write on the tap; the tap uses its own repository-scoped `GITHUB_TOKEN` to commit casks. Its scheduled sync also works without a PAT. Release builds do not run `go mod tidy` or change dependency files.
 - **Docker**: A multi-stage `Dockerfile` is provided to create a minimal, containerized version of the application for easy deployment.
 
 ### 8. Structured Journald Events
@@ -97,4 +98,3 @@ This mode is for more advanced use cases where you want the client to be respons
 5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
 
 During startup the service emits a log line that includes both the calculated cadence and its source (`source: ttl` or `source: check_interval`) to make diagnostics straightforward.
-

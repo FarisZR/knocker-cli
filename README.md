@@ -41,6 +41,18 @@ At startup the service logs the calculated cadence along with its source (`sourc
 
 ## Installation
 
+### Homebrew on Linux
+
+```bash
+brew tap fariszr/tap https://github.com/FarisZR/tap.git
+brew install --cask fariszr/tap/knocker
+```
+
+Use `brew update && brew upgrade --cask fariszr/tap/knocker` for updates.
+Releases automatically notify the tap after GoReleaser uploads all assets.
+See the [tap setup guide](https://github.com/FarisZR/tap#release-automation)
+for the optional `TAP_GITHUB_TOKEN` secret and its minimal permissions.
+
 ### From Source
 
 To install from source, you will need to have Go installed.
