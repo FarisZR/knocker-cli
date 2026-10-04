@@ -49,15 +49,18 @@ Install the prebuilt CLI on Linux x86_64 or ARM64 using Homebrew 6 or newer:
 brew update
 brew tap fariszr/tap
 brew trust fariszr/tap
-brew install --cask fariszr/tap/knocker
+brew install --cask knocker-cli
 knocker --help
 ```
 
-Review the tap before granting trust. To keep the CLI up to date:
+Review the tap before granting trust. The package is named `knocker-cli` to
+distinguish it from the core Knocker project; its executable remains `knocker`.
+After tapping and trusting, the short package name works without a tap prefix.
+To keep the CLI up to date:
 
 ```bash
 brew update
-brew upgrade --cask fariszr/tap/knocker
+brew upgrade --cask knocker-cli
 ```
 
 The [Homebrew tap](https://github.com/FarisZR/homebrew-tap) follows published GitHub
