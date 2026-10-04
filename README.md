@@ -43,15 +43,28 @@ At startup the service logs the calculated cadence along with its source (`sourc
 
 ### Homebrew on Linux
 
+Install the prebuilt CLI on Linux x86_64 or ARM64 using Homebrew 6 or newer:
+
 ```bash
+brew update
 brew tap fariszr/tap https://github.com/FarisZR/tap.git
+brew trust fariszr/tap
 brew install --cask fariszr/tap/knocker
+knocker --help
 ```
 
-Use `brew update && brew upgrade --cask fariszr/tap/knocker` for updates.
-Releases automatically notify the tap after GoReleaser uploads all assets.
-See the [tap setup guide](https://github.com/FarisZR/tap#release-automation)
-for the optional `TAP_GITHUB_TOKEN` secret and its minimal permissions.
+Review the tap before granting trust. To keep the CLI up to date:
+
+```bash
+brew update
+brew upgrade --cask fariszr/tap/knocker
+```
+
+The [Homebrew tap](https://github.com/FarisZR/tap) follows published GitHub
+releases automatically. It checks for releases every six hours; maintainers can
+also configure immediate release notifications as described in the tap README.
+Homebrew installs the CLI without starting its background service. See the
+service installation instructions below to configure and start it.
 
 ### From Source
 
