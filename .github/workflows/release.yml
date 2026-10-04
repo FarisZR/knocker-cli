@@ -61,5 +61,5 @@ jobs:
           printf '%s\n' '{"ref":"main"}' | gh api \
             --method POST \
             -H 'Accept: application/vnd.github+json' \
-            repos/FarisZR/tap/actions/workflows/sync.yml/dispatches \
+            repos/FarisZR/homebrew-tap/actions/workflows/sync.yml/dispatches \
             --input -

@@ -47,7 +47,7 @@ Install the prebuilt CLI on Linux x86_64 or ARM64 using Homebrew 6 or newer:
 
 ```bash
 brew update
-brew tap fariszr/tap https://github.com/FarisZR/tap.git
+brew tap fariszr/tap
 brew trust fariszr/tap
 brew install --cask fariszr/tap/knocker
 knocker --help
@@ -60,7 +60,7 @@ brew update
 brew upgrade --cask fariszr/tap/knocker
 ```
 
-The [Homebrew tap](https://github.com/FarisZR/tap) follows published GitHub
+The [Homebrew tap](https://github.com/FarisZR/homebrew-tap) follows published GitHub
 releases automatically. It checks for releases every six hours; maintainers can
 also configure immediate release notifications as described in the tap README.
 Homebrew installs the CLI without starting its background service. See the
