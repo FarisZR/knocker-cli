@@ -26,7 +26,7 @@ The command-line interface is built using the **Cobra** library. It provides the
 
 ### 2. Configuration (Viper)
 
-Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `.knocker.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and the `check_interval` used when polling for IP changes.
+Application configuration is managed by the **Viper** library. It allows for flexible configuration from a file (e.g., `.knocker.yaml`), environment variables, or command-line flags. This component is responsible for loading settings such as the API endpoint, API key, and `watch_network` and the fallback status `check_interval`.
 
 ### 3. Service Management (kardianos/service)
 
@@ -38,20 +38,47 @@ On Linux the installer targets the user-level systemd instance, producing `~/.co
 
 ### 4. Core Service Logic
 
-This is the heart of the application, located in the `internal/service` package. It contains the main loop that periodically performs the following actions. On startup the service issues its first knock immediately before scheduling the cadence timer, so restarts refresh the whitelist without waiting for the first interval.
+The `internal/service` loop serializes status checks, knocks, and state changes.
+Two independent schedules prevent network events from postponing renewal:
 
-1. **Health Check**: It first checks the `/health` endpoint of the remote API to ensure it is available.
-2. **IP Detection & Knocking**: The service operates in one of two modes:
-    - **Simple Mode (Default):** If no `ip_check_url` is configured, the service schedules knocks based on the best-known TTL. It starts with the configured TTL and adjusts to the TTL reported by the API response, aiming to refresh the whitelist when roughly 90% of the TTL has elapsed. When no TTL is known, the loop falls back to a 5-minute cadence. The remote API is responsible for identifying the client's IP from the request and updating the whitelist.
-    - **Comparison Mode (Optional):** If an `ip_check_url` is provided, the service first fetches its public IP from that URL. It compares this IP to the last known IP. If they are different, it then sends a "knock" request to the API to whitelist the new address. The polling cadence in this mode is controlled by the `check_interval` setting.
+- A renewal timer starts from configured TTL and follows the server-returned TTL
+  after a successful knock, refreshing at approximately 90% of TTL. Unknown TTL
+  uses five minutes. Renewal runs in both modes, even without an IP change.
+- With `watch_network` enabled, a separate periodic status ticker uses
+  `check_interval`. A network event also arms a one-second debounce timer.
+  Unknown status or a failed network knock retries after five seconds.
+
+Simple mode knocks immediately at startup. Monitoring mode first checks status;
+active startup coverage seeds state and renewal using its remaining TTL. For
+subsequent checks, active coverage updates the observed state without changing
+renewal. Inactive coverage triggers a knock and resets renewal only on success.
+Failed status requests never imply inactive coverage. Scheduled renewal failures
+retry after five seconds. The startup health probe is removed so transient
+unavailability can recover through the service's retry paths.
 
 ### 5. API Client
 
-A simple HTTP client, located in the `internal/api` package, is responsible for all communication with the remote Knocker API. It handles making requests to the `/health` and `/knock` endpoints and includes retry logic for transient network errors.
+`internal/api` implements `/health`, `/knock`, and authenticated `GET /status`.
+Status uses `X-Api-Key` and validates the response's IP, explicit whitelist boolean,
+and expiry metadata. Unknown or malformed responses produce errors, never an
+implicit inactive result. Knocks omit the IP so the server resolves the source of
+that request, including when connectivity changes between status and knock.
+HTTP requests have a ten-second timeout. Status checks close idle connections to
+avoid retaining a previous network's connection.
 
-### 6. IP Utility
+### 6. Network Detection
 
-The `internal/util` package contains a utility for fetching the public IP address from external services. This is an optional feature, as the primary method of IP detection is handled by the remote API.
+On Linux, a read-only `NETLINK_ROUTE` socket subscribes to link, IPv4/IPv6 address,
+and route multicast groups without elevated privileges. A buffered notification
+channel coalesces events. A bounded nonblocking socket poll permits cancellation
+and socket cleanup at shutdown. Listener failures leave periodic status checking
+available. Netlink receive-buffer overflow also requests a status check.
+
+Other platforms compare interface flags and address snapshots every two seconds.
+Periodic server status checks catch route-only and upstream changes. All local
+listeners stop with the service. No third-party IP lookup participates in the
+service; a nonempty legacy `ip_check_url` enables monitoring but is never fetched.
+
 
 ### 7. Build and Release (GoReleaser & Docker)
 
@@ -68,33 +95,20 @@ Linux deployments run the service as a systemd user unit. To support UI integrat
     - `ServiceState` when entering `started`, `stopping`, or `stopped` transitions (including `KNOCKER_VERSION`).
     - `StatusSnapshot` whenever material state changes (whitelist, TTL, next knock timestamp) so consumers can seed their UI.
     - `WhitelistApplied`, `WhitelistExpired`, `NextKnockUpdated`, and `KnockTriggered` as the whitelist lifecycle evolves.
-    - `Error` whenever a problem (IP lookup, health check, knock) should surface in the UI, tagged with `KNOCKER_ERROR_CODE`.
+    - `Error` whenever a problem (status check or knock) should surface in the UI, tagged with `KNOCKER_ERROR_CODE`.
 - Manual invocations of `knocker knock` reuse the same contract, emitting `KnockTriggered` and `WhitelistApplied` events from the CLI path to keep consumers in sync even if the background service is idle.
 
 Consumers can tail these events with `journalctl --user -u knocker.service KNOCKER_EVENT= -o json` and update their state using the accompanying structured fields.
 
-## How It Works: IP Change Detection
+## Network Status and Renewal
 
-`knocker-cli` operates in two distinct modes for handling IP changes:
+Enable monitoring with `watch_network: true`, `KNOCKER_WATCH_NETWORK=true`, or
+`--watch_network`. The default remains periodic TTL-based renewal. Monitoring
+requires the server's authenticated `/status` endpoint. Status includes dynamic
+CIDR coverage and reports the connection's address family and route; it cannot
+promise coverage for services reached over a different route or family.
 
-### Simple Mode (Default)
-
-This is the default and recommended mode of operation.
-
-1. The `knocker-cli` service starts and sends a "knock" request based on the best-known TTL, starting with the configured value and updating when the API returns a TTL. It aims to refresh the whitelist when roughly 90% of the TTL has elapsed (falling back to a 5-minute cadence if the TTL is unset).
-2. The service **does not** check its own IP address.
-3. Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
-
-In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whitelist entry fresh.
-
-### Comparison Mode (Optional)
-
-This mode is for more advanced use cases where you want the client to be responsible for detecting IP changes.
-
-1. To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
-2. The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
-3. At each `check_interval`, it fetches the IP again.
-4. It compares the new IP with the one stored in memory.
-5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
-
-During startup the service emits a log line that includes both the calculated cadence and its source (`source: ttl` or `source: check_interval`) to make diagnostics straightforward.
+Network-triggered knocks emit `KnockTriggered` with source `network`; failed status
+checks emit `Error` with code `status_check_failed`. Observed existing coverage
+updates `StatusSnapshot` with source `external` without emitting a fictitious
+`WhitelistApplied` event or changing the next renewal deadline.

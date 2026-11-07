@@ -106,3 +106,36 @@ func TestKnockWithTTL(t *testing.T) {
 		t.Errorf("Knock with TTL failed: %v", err)
 	}
 }
+
+func TestStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		code       int
+		wantErr    bool
+	}{
+		{"active IPv6", `{"ip_address":"2001:db8::1","whitelisted":true,"expires_at":2000000000,"expires_in_seconds":30}`, 200, false},
+		{"inactive", `{"ip_address":"203.0.113.1","whitelisted":false,"expires_at":null,"expires_in_seconds":0}`, 200, false},
+		{"missing boolean", `{"ip_address":"203.0.113.1","expires_in_seconds":0}`, 200, true},
+		{"missing expiry", `{"ip_address":"203.0.113.1","whitelisted":true,"expires_in_seconds":30}`, 200, true},
+		{"invalid IP", `{"ip_address":"invalid","whitelisted":false,"expires_in_seconds":0}`, 200, true},
+		{"malformed JSON", `{`, 200, true},
+		{"unauthorized", `{}`, 401, true},
+		{"rate limited", `{}`, 429, true},
+		{"old server", `{}`, 404, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != "/status" || r.Header.Get("X-Api-Key") != "key" {
+					t.Errorf("incorrect status request")
+				}
+				w.WriteHeader(tc.code)
+				w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			_, err := NewClient(server.URL, "key").Status()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}

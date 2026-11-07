@@ -15,29 +15,40 @@
 
 `knocker-cli` operates in two distinct modes for handling IP changes:
 
-When the service starts it immediately performs a scheduled knock before arming its cadence timer, so a restart refreshes the whitelist without waiting for the next interval.
-
 ### Simple Mode (Default)
 
-This is the default and recommended mode of operation.
+The service knocks immediately on startup and refreshes at roughly 90% of the
+server-returned TTL. If no TTL is known, it uses a five-minute cadence. The server
+identifies the request's source IP.
 
-1. The `knocker-cli` service starts and sends a "knock" request based on the best-known TTL. It begins with the configured TTL and adjusts to the TTL returned by the API response, aiming to refresh the whitelist when roughly 90% of the TTL has elapsed (falling back to a 5-minute cadence if the TTL is unknown or unset).
-2. The service **does not** check its own IP address.
-3. Your API server receives the "knock" request, inspects the source IP address of the request, and updates its whitelist accordingly.
+### Network Monitoring (Optional)
 
-In this mode, `knocker-cli` acts as a simple, periodic "pinger" to keep your whitelist entry fresh.
+Set `watch_network: true` (or `KNOCKER_WATCH_NETWORK=true`, or the
+`--watch_network` flag). This requires a server with the authenticated
+[`GET /status` endpoint](https://github.com/FarisZR/knocker/pull/117).
 
-### Comparison Mode (Optional)
+- At startup, check server status. If coverage is active, schedule renewal from
+  the remaining TTL; otherwise knock immediately.
+- On Linux, listen for kernel netlink interface, IPv4/IPv6 address, and route
+  events, including disconnects, reconnects, and Ethernet/Wi-Fi or VPN changes.
+  This listener requires no root privileges. Events are debounced for one second.
+- On macOS and Windows, compare local interface/address snapshots every two
+  seconds. Route-only changes are covered by periodic server checks.
+- After a network change, query `/status` with the API key. If already whitelisted
+  (including CIDR coverage), keep the renewal schedule unchanged. Otherwise knock
+  without specifying an IP, then reset renewal from the knock response's TTL.
+- Continue TTL-based renewal even when the IP does not change. `check_interval`
+  independently controls periodic status checks, covering upstream public IP
+  changes or missed local events.
+- Failed status checks mean unknown coverage: do not knock based on that failure.
+  Retry after five seconds, and on subsequent network events. Failed scheduled
+  renewals also retry after five seconds.
 
-This mode is for more advanced use cases where you want the client to be responsible for detecting IP changes.
+No third-party IP lookup is used. For existing configurations, a nonempty
+`ip_check_url` enables this mode as a deprecated compatibility alias; its URL is
+ignored. Servers without `/status` can continue using simple mode.
 
-1. To enable this mode, you must provide an `ip_check_url` in your configuration. This URL should point to a service that returns the client's public IP in plain text (e.g., `https://ifconfig.me`).
-2. The `knocker-cli` service starts and fetches its public IP from the `ip_check_url`. It stores this IP in memory.
-3. At each `check_interval`, it fetches the IP again.
-4. It compares the new IP with the one stored in memory.
-5. If the IP address has changed, and only if it has changed, the service will send a "knock" request to your API server to whitelist the new address.
-
-At startup the service logs the calculated cadence along with its source (`source: ttl` or `source: check_interval`) so you can confirm which mechanism is driving the schedule.
+Status describes only the route and address family used by the API connection.
 
 ## Installation
 
@@ -71,7 +82,7 @@ service installation instructions below to configure and start it.
 
 ### From Source
 
-To install from source, you will need to have Go installed.
+To install from source, you will need Go 1.26 or newer.
 
 ```bash
 git clone https://github.com/FarisZR/knocker-cli.git
@@ -99,8 +110,8 @@ Create a file named `.knocker.yaml` in your home directory with the following co
 ```yaml
 api_url: "http://your-knocker-api-url"
 api_key: "your-api-key"
-check_interval: 5 # The interval in minutes to poll for IP changes when ip_check_url is set.
-ip_check_url: "" # optional, e.g. "https://ifconfig.me"
+watch_network: false # optional, check server status on network changes
+check_interval: 5 # fallback server status check interval in minutes
 ttl: 0 # optional, time to live in seconds for the knock request (0 for server default)
 ```
 
@@ -110,13 +121,12 @@ You can also configure `knocker-cli` using environment variables:
 
 - `KNOCKER_API_URL`: The URL of the Knocker API.
 - `KNOCKER_API_KEY`: Your API key.
-- `KNOCKER_CHECK_INTERVAL`: The interval in minutes to poll for IP changes when `ip_check_url` is set.
-- `KNOCKER_IP_CHECK_URL`: Optional URL of the external IP checker service.
+- `KNOCKER_WATCH_NETWORK`: Enable network monitoring and server status checks (default `false`).
+- `KNOCKER_CHECK_INTERVAL`: Fallback server status check interval in minutes (default `5`).
+- `KNOCKER_IP_CHECK_URL`: Deprecated compatibility alias; any nonempty value enables network monitoring. The URL is ignored.
 - `KNOCKER_TTL`: Optional time to live in seconds for the knock request (0 for server default).
 
 When running as the packaged systemd user service, these variables can be placed in `~/.config/knocker/env` using the standard `KEY=value` format.
-
-When `ip_check_url` is unset, the service automatically schedules knocks so that roughly 10% of the TTL remains before expiry. It starts with the configured TTL but updates the cadence whenever the API returns a TTL, falling back to a 5-minute cadence only when no TTL is known. When `ip_check_url` is provided, the `check_interval` controls how frequently the client polls for IP changes and only knocks when the IP actually changes.
 
 ## Structured journald events
 
@@ -129,7 +139,7 @@ When the service runs under systemd (for example as `knocker.service`), every op
   - `StatusSnapshot` — current whitelist, TTL, and next scheduled knock.
   - `WhitelistApplied` / `WhitelistExpired` — whitelist changes with expiry metadata.
   - `NextKnockUpdated` — upcoming knock timestamp (or `0` when cleared).
-  - `KnockTriggered` — manual (`cli`) and scheduled (`schedule`) knocks with success/failure result.
+  - `KnockTriggered` — manual (`cli`), scheduled (`schedule`), and network/status (`network`) knocks with success/failure result.
   - `Error` — surfaced issues that should be shown in the UI.
 
 Manual invocations of `knocker knock` produce the same `KnockTriggered` and `WhitelistApplied` events so external consumers stay in sync even when the background service is idle.
@@ -200,3 +210,17 @@ To create cross-platform builds, archives, and releases, you can use [GoReleaser
 # This will create builds for all platforms defined in .goreleaser.yml
 goreleaser release --snapshot --clean
 ```
+
+### Local server integration test
+
+With `uv`, Python 3, Go, and a current checkout of the Knocker server available:
+
+```bash
+python3 scripts/e2e.py /path/to/knocker
+```
+
+This starts a disposable server on loopback with firewall integration disabled and
+an isolated whitelist. It tests CIDR coverage, network changes, TTL renewal, and
+recovery after a simulated disconnect, then removes the test data. Source changes
+are simulated using forwarded addresses from the trusted local test transport;
+it does not switch your machine's adapters.

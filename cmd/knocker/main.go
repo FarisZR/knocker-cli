@@ -80,8 +80,10 @@ func init() {
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is $HOME/.knocker.yaml)")
-	rootCmd.PersistentFlags().Int("check_interval", 5, "Interval in minutes to poll for IP changes (only used when ip_check_url is set)")
-	rootCmd.PersistentFlags().String("ip_check_url", "", "URL of the external IP checker service")
+	rootCmd.PersistentFlags().Int("check_interval", 5, "Interval in minutes for fallback server status checks when watch_network is enabled")
+	rootCmd.PersistentFlags().String("ip_check_url", "", "Deprecated: any nonempty value enables watch_network; URL is ignored")
+	rootCmd.PersistentFlags().Bool("watch_network", false, "Check server whitelist status on network changes")
+	viper.BindPFlag("watch_network", rootCmd.PersistentFlags().Lookup("watch_network"))
 	rootCmd.PersistentFlags().Int("ttl", 0, "Time to live in seconds for the knock request (0 for server default)")
 	viper.BindPFlag("check_interval", rootCmd.PersistentFlags().Lookup("check_interval"))
 	viper.BindPFlag("ip_check_url", rootCmd.PersistentFlags().Lookup("ip_check_url"))

@@ -6,7 +6,6 @@ import (
 
 	"github.com/FarisZR/knocker-cli/internal/api"
 	internalService "github.com/FarisZR/knocker-cli/internal/service"
-	"github.com/FarisZR/knocker-cli/internal/util"
 	"github.com/kardianos/service"
 	"github.com/spf13/viper"
 )
@@ -29,7 +28,6 @@ func (p *program) Start(s service.Service) error {
 }
 func (p *program) run(quit <-chan struct{}) {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
-	ipGetter := util.NewIPGetter()
 	configuredCheckInterval := time.Duration(viper.GetInt("check_interval")) * time.Minute
 	ipCheckURL := viper.GetString("ip_check_url")
 	ttl := viper.GetInt("ttl")
@@ -40,19 +38,11 @@ func (p *program) run(quit <-chan struct{}) {
 	}
 
 	knockCadence := internalService.KnockCadenceFromTTL(ttl)
-	cadenceSource := "ttl"
+	watchNetwork := viper.GetBool("watch_network") || ipCheckURL != ""
 	if ipCheckURL != "" {
-		knockCadence = checkInterval
-		cadenceSource = "check_interval"
+		logger.Println("ip_check_url is deprecated; enabling server status checks and network monitoring. The URL will not be contacted.")
 	}
-
-	// Perform initial health check
-	if err := apiClient.HealthCheck(); err != nil {
-		logger.Fatalf("Initial health check failed: %v. Please check your API URL and key.", err)
-	}
-	logger.Println("API health check successful.")
-
-	knockerService := internalService.NewService(apiClient, ipGetter, knockCadence, ipCheckURL, ttl, cadenceSource, version, logger)
+	knockerService := internalService.NewService(apiClient, knockCadence, watchNetwork, checkInterval, ttl, "ttl", version, logger)
 
 	p.mu.Lock()
 	p.service = knockerService
