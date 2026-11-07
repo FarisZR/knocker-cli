@@ -44,9 +44,12 @@ Two independent schedules prevent network events from postponing renewal:
 - A renewal timer starts from configured TTL and follows the server-returned TTL
   after a successful knock, refreshing at approximately 90% of TTL. Unknown TTL
   uses five minutes. Renewal runs in both modes, even without an IP change.
-- With `watch_network` enabled, a separate periodic status ticker uses
-  `check_interval`. A network event also arms a one-second debounce timer.
-  Unknown status or a failed network knock retries after five seconds.
+- With `watch_network` enabled, a separate status timer uses
+  `check_interval`. Network events bring that check forward to one second away;
+  further events cannot postpone an already pending check.
+  Unknown status or a failed network knock retries after five seconds, doubling
+  consecutive failure delays up to `check_interval` and resetting after a
+  successful check. Network events still request fresh checks.
 
 Simple mode knocks immediately at startup. Monitoring mode first checks status;
 active startup coverage seeds state and renewal using its remaining TTL. For

@@ -26,6 +26,8 @@ func (p *program) Start(s service.Service) error {
 	go p.run(quit)
 	return nil
 }
+
+// run loads global settings and runs the core service until shutdown.
 func (p *program) run(quit <-chan struct{}) {
 	apiClient := api.NewClient(viper.GetString("api_url"), viper.GetString("api_key"))
 	configuredCheckInterval := time.Duration(viper.GetInt("check_interval")) * time.Minute

@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/FarisZR/knocker-cli/internal/api"
@@ -198,3 +200,62 @@ func TestStatusPollingPreservesRenewalDeadline(t *testing.T) {
 		}
 	}
 }
+
+// TestStatusRetryBackoff uses virtual time to verify retry growth, its cap,
+// success reset, and prompt network checks without depending on wall-clock timing.
+func TestStatusRetryBackoff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var failing atomic.Bool
+		failing.Store(true)
+		var attempts atomic.Int32
+		client := api.NewClient("http://knocker.test", "key")
+		client.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/status" {
+				t.Errorf("unexpected endpoint %s", req.URL.Path)
+			}
+			attempts.Add(1)
+			code, body := 503, `{}`
+			if !failing.Load() {
+				code, body = 200, `{"ip_address":"203.0.113.1","whitelisted":true,"expires_at":2000000000,"expires_in_seconds":3600}`
+			}
+			return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+		})
+		svc := NewService(client, time.Hour, true, time.Minute, 0, "ttl", "test", log.New(io.Discard, "", 0))
+		changes := make(chan struct{}, 1)
+		svc.networkChanges = changes
+		quit, done := make(chan struct{}), make(chan struct{})
+		go func() { defer close(done); svc.Run(quit) }()
+		defer func() { close(quit); <-done }()
+		synctest.Wait()
+		if attempts.Load() != 1 {
+			t.Fatalf("expected startup attempt, got %d", attempts.Load())
+		}
+		expectRetry := func(delay time.Duration) {
+			t.Helper()
+			count := attempts.Load()
+			time.Sleep(delay - time.Nanosecond)
+			synctest.Wait()
+			if attempts.Load() != count {
+				t.Fatalf("retried before %v", delay)
+			}
+			time.Sleep(time.Nanosecond)
+			synctest.Wait()
+			if attempts.Load() != count+1 {
+				t.Fatalf("expected one retry after %v, got %d", delay, attempts.Load()-count)
+			}
+		}
+		for _, delay := range []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 40 * time.Second, time.Minute, time.Minute} {
+			expectRetry(delay)
+		}
+		failing.Store(false)
+		changes <- struct{}{}
+		expectRetry(time.Second) // fresh connectivity bypasses the retry backoff
+		failing.Store(true)
+		expectRetry(time.Minute)     // success restores normal status polling
+		expectRetry(5 * time.Second) // next failure starts again at the initial delay
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }

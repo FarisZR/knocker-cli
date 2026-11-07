@@ -41,7 +41,9 @@ Set `watch_network: true` (or `KNOCKER_WATCH_NETWORK=true`, or the
   independently controls periodic status checks, covering upstream public IP
   changes or missed local events.
 - Failed status checks mean unknown coverage: do not knock based on that failure.
-  Retry after five seconds, and on subsequent network events. Failed scheduled
+  Retry after five seconds, doubling consecutive failure delays up to
+  `check_interval`; a successful status check resets the delay. Network events
+  still trigger fresh checks. Failed scheduled
   renewals also retry after five seconds.
 
 No third-party IP lookup is used. For existing configurations, a nonempty

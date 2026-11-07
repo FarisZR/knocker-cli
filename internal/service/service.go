@@ -31,6 +31,7 @@ type Service struct {
 	shutdownOnce sync.Once
 }
 
+// NewService configures independent TTL renewal and optional network status checks.
 func NewService(apiClient *api.Client, cadence time.Duration, watchNetwork bool, checkInterval time.Duration, ttl int, cadenceSource string, version string, logger *log.Logger) *Service {
 	return &Service{
 		APIClient: apiClient, Cadence: NormalizeCheckInterval(cadence), Logger: logger,
@@ -40,6 +41,7 @@ func NewService(apiClient *api.Client, cadence time.Duration, watchNetwork bool,
 	}
 }
 
+// Run serializes network checks and TTL renewals until quit or Stop is signaled.
 func (s *Service) Run(quit <-chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -69,13 +71,26 @@ func (s *Service) Run(quit <-chan struct{}) {
 	pending.Stop()
 	defer pending.Stop()
 	var pendingC <-chan time.Time
-	retryStatus := func() { pending.Reset(s.retryDelay); pendingC = pending.C }
+	var nextStatus time.Time
+	statusRetry := min(s.retryDelay, s.checkInterval)
+	refreshStatus := func() bool {
+		knocked, err := s.checkStatus()
+		delay := s.checkInterval
+		if err != nil {
+			delay = statusRetry
+			// Double without overflowing, and never exceed the regular poll interval.
+			statusRetry += min(statusRetry, s.checkInterval-statusRetry)
+		} else {
+			statusRetry = min(s.retryDelay, s.checkInterval)
+		}
+		pending.Reset(delay)
+		pendingC = pending.C
+		nextStatus = time.Now().Add(delay)
+		return knocked
+	}
 	initialDelay := s.Cadence
 	if s.watchNetwork {
-		knocked, err := s.checkStatus()
-		if err != nil {
-			retryStatus()
-		}
+		knocked := refreshStatus()
 		if !knocked && s.currentWhitelist != nil {
 			s.adjustCadenceForTTL(s.currentWhitelist.TTLSeconds)
 		}
@@ -84,12 +99,6 @@ func (s *Service) Run(quit <-chan struct{}) {
 		initialDelay = s.retryDelay
 	}
 	resetRenewal(initialDelay)
-	var pollC <-chan time.Time
-	if s.watchNetwork {
-		poll := time.NewTicker(s.checkInterval)
-		defer poll.Stop()
-		pollC = poll.C
-	}
 	defer func() {
 		s.clearNextKnock()
 		s.emitStatusSnapshot()
@@ -109,18 +118,16 @@ func (s *Service) Run(quit <-chan struct{}) {
 				changes = nil
 				continue
 			}
-			pending.Reset(s.networkDebounce)
-			pendingC = pending.C
-		case <-pollC:
-			pending.Reset(0)
-			pendingC = pending.C
+			// Coalesce bursts without postponing an already pending check.
+			next := time.Now().Add(s.networkDebounce)
+			if next.Before(nextStatus) {
+				pending.Reset(s.networkDebounce)
+				pendingC = pending.C
+				nextStatus = next
+			}
 		case <-pendingC:
 			pendingC = nil
-			knocked, err := s.checkStatus()
-			if err != nil {
-				retryStatus()
-			}
-			if knocked {
+			if refreshStatus() {
 				resetRenewal(s.Cadence)
 			}
 		case <-quit:
@@ -148,6 +155,7 @@ func (s *Service) NotifyStopping() {
 	})
 }
 
+// checkAndKnock refreshes coverage on the regular renewal schedule.
 func (s *Service) checkAndKnock() bool {
 	response, err := s.performKnock("", TriggerSourceSchedule)
 	if err != nil {
@@ -178,6 +186,7 @@ func (s *Service) checkStatus() (bool, error) {
 	return err == nil, err
 }
 
+// performKnock requests coverage and records the outcome and server TTL.
 func (s *Service) performKnock(ip, source string) (*api.KnockResponse, error) {
 	knockResponse, err := s.APIClient.Knock(ip, s.ttl)
 	if err != nil {
@@ -197,6 +206,7 @@ func (s *Service) performKnock(ip, source string) (*api.KnockResponse, error) {
 	return knockResponse, nil
 }
 
+// handleWhitelistResponse applies server coverage to local state and renewal cadence.
 func (s *Service) handleWhitelistResponse(knockResponse *api.KnockResponse, source string) {
 	s.currentWhitelist = &whitelistState{
 		IP:          knockResponse.WhitelistedEntry,
@@ -211,6 +221,7 @@ func (s *Service) handleWhitelistResponse(knockResponse *api.KnockResponse, sour
 	s.emitStatusSnapshot()
 }
 
+// adjustCadenceForTTL refreshes at 90% of a positive server TTL.
 func (s *Service) adjustCadenceForTTL(ttlSeconds int) {
 	if ttlSeconds <= 0 {
 		return
@@ -226,6 +237,7 @@ func (s *Service) adjustCadenceForTTL(ttlSeconds int) {
 	s.Logger.Printf("Adjusted knock cadence to %v based on server TTL (%ds).", newCadence, ttlSeconds)
 }
 
+// checkWhitelistExpiry clears observed coverage once its server expiry has passed.
 func (s *Service) checkWhitelistExpiry(now time.Time) {
 	if s.currentWhitelist == nil {
 		return

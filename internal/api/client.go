@@ -48,6 +48,7 @@ func (c *Client) HealthCheck() error {
 	return nil
 }
 
+// Knock requests source-IP coverage, or explicit remote coverage when permitted.
 func (c *Client) Knock(ipAddress string, ttl int) (*KnockResponse, error) {
 	requestBody := map[string]any{}
 	if ipAddress != "" {
@@ -96,6 +97,7 @@ type StatusResponse struct {
 	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
+// Status checks authenticated coverage for this connection without extending it.
 func (c *Client) Status() (*StatusResponse, error) {
 	// Reconnect so status observes the route after a network change.
 	c.HTTPClient.CloseIdleConnections()
