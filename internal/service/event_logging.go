@@ -25,6 +25,7 @@ const (
 )
 
 const (
+	TriggerSourceNetwork  = "network"
 	TriggerSourceCLI      = "cli"
 	TriggerSourceSchedule = "schedule"
 	TriggerSourceExternal = "external"
@@ -36,8 +37,7 @@ const (
 )
 
 const (
-	ErrorCodeIPLookup    = "ip_lookup_failed"
-	ErrorCodeHealthCheck = "health_check_failed"
+	ErrorCodeStatusCheck = "status_check_failed"
 	ErrorCodeKnockFailed = "knock_failed"
 )
 
